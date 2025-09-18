@@ -1,0 +1,16 @@
+services:
+  - name: ${REPO_NAME}-backend
+    type: web_service
+    env: python
+    branch: main
+    root: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    plan: free
+
+  - name: ${REPO_NAME}-frontend
+    type: static_site
+    branch: main
+    root: frontend
+    publishPath: .
+    plan: free
