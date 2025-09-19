@@ -1,8 +1,11 @@
-from flask import Flask, jsonify
-app = Flask(__name__)
-@app.route('/')
-def home(): return "Backend running"
-@app.route('/health')
-def health(): return jsonify(status='ok')
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+@app.get("/hello")
+async def hello():
+    return {"message": "AstroQuant backend running"}
