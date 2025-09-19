@@ -1,20 +1,25 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>AstroQuant Frontend</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroQuant Frontend</title>
+</head>
 <body>
-<h1>AstroQuant Frontend Running</h1>
-<p>Connects to backend /hello</p>
-<script>
-async function ping() {
-    try {
-        const res = await fetch('/hello');
-        const j = await res.json();
-        document.body.appendChild(document.createElement('pre')).innerText = JSON.stringify(j, null, 2);
-    } catch(e) {
-        document.body.appendChild(document.createElement('pre')).innerText = 'Backend not reachable';
+  <h1>AstroQuant Frontend Live ✅</h1>
+  <p id="backend-status">Checking backend...</p>
+
+  <script>
+    async function checkBackend() {
+      try {
+        const res = await fetch("https://astro-quant-live-backend.onrender.com/health");
+        const data = await res.json();
+        document.getElementById("backend-status").innerText = "Backend: " + JSON.stringify(data);
+      } catch (err) {
+        document.getElementById("backend-status").innerText = "Backend unreachable ❌";
+      }
     }
-}
-ping();
-</script>
+    checkBackend();
+  </script>
 </body>
 </html>
