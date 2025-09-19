@@ -7,14 +7,12 @@ services:
     branch: main
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT server:app
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
 
   - type: static
     name: astro-quant-frontend
-    env: static
-    plan: free
     repo: https://github.com/SRAVANTAMARANA/astro-quant-live
     branch: main
     rootDir: frontend
-    buildCommand: ""       # if using React: npm install && npm run build
-    publishDir: frontend   # if React: frontend/build
+    buildCommand: ""   # If using plain HTML
+    publishDir: frontend
