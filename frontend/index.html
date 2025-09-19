@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>AstroQuant Frontend</title></head>
+<body>
+<h1>AstroQuant Frontend Running</h1>
+<p>Connects to backend /hello</p>
+<script>
+async function ping() {
+    try {
+        const res = await fetch('/hello');
+        const j = await res.json();
+        document.body.appendChild(document.createElement('pre')).innerText = JSON.stringify(j, null, 2);
+    } catch(e) {
+        document.body.appendChild(document.createElement('pre')).innerText = 'Backend not reachable';
+    }
+}
+ping();
+</script>
+</body>
+</html>
