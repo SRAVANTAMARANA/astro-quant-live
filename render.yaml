@@ -3,21 +3,37 @@ services:
     name: astro-quant-live-backend
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.server:app --host 0.0.0.0 --port $PORT
+    repo: SRAVANTAMARANA/astro-quant-live
     branch: main
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.server:app --host 0.0.0.0 --port $PORT
 
   - type: web
     name: astro-quant-live-frontend
     env: node
     plan: free
-    buildCommand: |
-      cd frontend
-      npm install
-      npm run build
-    startCommand: |
-      cd frontend
-      npm run preview -- --host 0.0.0.0 --port $PORT
+    repo: SRAVANTAMARANA/astro-quant-live
     branch: main
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
+    buildCommand: |
+      cd frontend || true
+      if [ -f package.json ]; then
+        if [ -f yarn.lock ]; then
+          yarn install
+          yarn build || npm run build || true
+        else
+          npm install
+          npm run build || true
+        fi
+      fi
+    startCommand: |
+      cd frontend || true
+      # For Render preview we use simple static server if build exists
+      if [ -d build ] || [ -d dist ] || [ -d public ]; then
+        # try serve (npm i -g serve) fallback if not available
+        npx serve -s build -l $PORT || npx serve -s dist -l $PORT || npx http-server build -p $PORT || true
+      else
+        # fallback dev preview
+        npm run preview -- --host 0.0.0.0 --port $PORT || npm run start -- --host 0.0.0.0 --port $PORT || true
+      fi
