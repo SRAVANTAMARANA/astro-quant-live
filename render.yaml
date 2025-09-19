@@ -3,7 +3,7 @@ services:
     name: astro-quant-live-backend
     env: python
     plan: free
-    repo: SRAVANTAMARANA/astro-quant-live
+    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
     branch: main
     buildCommand: |
       pip install --upgrade pip
@@ -23,13 +23,11 @@ services:
     name: astro-quant-live-frontend
     env: node
     plan: free
-    repo: SRAVANTAMARANA/astro-quant-live
+    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
     branch: main
     buildCommand: |
       # no compile/build step required for simple static frontend
-      # install small static server
       npm i -g serve
     startCommand: |
-      # serve the frontend directory directly
       cd frontend
       serve -s . -l $PORT
