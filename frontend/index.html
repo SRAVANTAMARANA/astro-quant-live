@@ -1,414 +1,129 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>AstroQuant — 4 Chart Panel (Demo)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
-  <!-- zoom plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <!-- annotation plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.2/dist/chartjs-plugin-annotation.min.js"></script>
+  <meta charset="utf-8"/>
+  <title>AstroQuant — Live 4 Charts (ICT / Gann / Math / Momentum)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    :root{
-      --bg:#081018; --panel:#0f1720; --accent:#25e1c6; --muted:#9aa7b3; --card:#0b1220;
-    }
-    body{font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#04060a 0%, #061924 100%); color:#e6f6f3; margin:0; -webkit-font-smoothing:antialiased;}
-    .wrap{max-width:1200px;margin:18px auto;padding:12px;}
-    header{display:flex;gap:12px;align-items:center; margin-bottom:12px;}
-    header h1{font-size:20px;margin:0;color:var(--accent)}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .panel{background:var(--panel);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.5); position:relative}
-    .panel .controls{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
-    .btn{background:#0b1620;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:7px;color:var(--muted);cursor:pointer}
-    .btn.primary{background:var(--accent);color:#022623}
-    canvas{background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0)); border-radius:6px; display:block; width:100% !important; height:320px !important}
-    .small{font-size:13px;color:var(--muted)}
-    .side-panel{display:flex;flex-direction:column;gap:10px;margin-left:12px; min-width:260px}
-    .top-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-    .helper{background:#07121a;padding:10px;border-radius:8px}
-    label{font-size:12px;color:var(--muted)}
-    input, select{background:#07121a;border:1px solid rgba(255,255,255,0.04);padding:6px;color:#cfeee6;border-radius:6px;width:100%}
-    .row{display:flex;gap:8px}
-    .stat{font-weight:600;color:#e6ffef}
-    .hidden{display:none}
-    @media(max-width:900px){ .grid{grid-template-columns:1fr} .side-panel{min-width:unset;margin-left:0} canvas{height:260px !important} }
+    html,body{height:100%;margin:0;background:#041521;color:#dfeffb;font-family:Inter,Arial}
+    .container{display:flex;flex-direction:column;height:100vh;padding:12px;box-sizing:border-box}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:12px;flex:1}
+    .chart-card{background:#061c29;padding:10px;border-radius:8px;display:flex;flex-direction:column}
+    .chart-title{font-size:14px;margin-bottom:6px;color:#bfeefc;display:flex;justify-content:space-between}
+    .chart-canvas-wrap{flex:1;min-height:260px}
+    .controls button{background:#0f3750;border:1px solid #1f6b8f;color:#eaf6ff;padding:4px 6px;border-radius:6px;cursor:pointer;margin:2px}
+    .panel{position:absolute;top:10px;right:10px;background:#04232b;padding:10px;border-radius:8px;display:none;color:#dff6ff;z-index:50;max-width:300px}
+    .signal.good{color:#77f7a9} .signal.bad{color:#ff8787} .signal.info{color:#9ddfff}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>AstroQuant — Demo Dashboard (4 charts)</h1>
-      <div class="small">Interactive: zoom/pan, draw lines, min/max/close display</div>
-    </header>
-
-    <div style="display:flex;gap:12px;align-items:flex-start;">
-      <div style="flex:1">
-        <div class="grid">
-          <!-- Chart 1 -->
-          <div class="panel" id="panel1">
-            <div class="top-row">
-              <div><strong>Chart 1 — ICT Model (auto detect)</strong></div>
-              <div class="small">Chart 1</div>
-            </div>
-            <div class="controls">
-              <button class="btn" onclick="togglePanel(1)">Hide</button>
-              <button class="btn" onclick="zoomReset(1)">Reset Zoom</button>
-              <button class="btn" onclick="addLineAnnotation(1)">Add Line</button>
-              <button class="btn" onclick="toggleScale(1)">Scale 1x/2x</button>
-              <div style="margin-left:auto" class="small">Min <span id="min1" class="stat">-</span> Max <span id="max1" class="stat">-</span> Close <span id="close1" class="stat">-</span></div>
-            </div>
-            <canvas id="chart1"></canvas>
-          </div>
-
-          <!-- Chart 2 -->
-          <div class="panel" id="panel2">
-            <div class="top-row">
-              <div><strong>Chart 2 — Gann / Conversions</strong></div>
-              <div class="small">Chart 2</div>
-            </div>
-            <div class="controls">
-              <button class="btn" onclick="togglePanel(2)">Hide</button>
-              <button class="btn" onclick="zoomReset(2)">Reset Zoom</button>
-              <button class="btn" onclick="addLineAnnotation(2)">Add Line</button>
-              <button class="btn" onclick="toggleScale(2)">Scale 1x/2x</button>
-              <div style="margin-left:auto" class="small">Min <span id="min2" class="stat">-</span> Max <span id="max2" class="stat">-</span> Close <span id="close2" class="stat">-</span></div>
-            </div>
-            <canvas id="chart2"></canvas>
-          </div>
-
-          <!-- Chart 3 -->
-          <div class="panel" id="panel3">
-            <div class="top-row">
-              <div><strong>Chart 3 — Math / Algo signals</strong></div>
-              <div class="small">Chart 3</div>
-            </div>
-            <div class="controls">
-              <button class="btn" onclick="togglePanel(3)">Hide</button>
-              <button class="btn" onclick="zoomReset(3)">Reset Zoom</button>
-              <button class="btn" onclick="addLineAnnotation(3)">Add Line</button>
-              <button class="btn" onclick="toggleScale(3)">Scale 1x/2x</button>
-              <div style="margin-left:auto" class="small">Min <span id="min3" class="stat">-</span> Max <span id="max3" class="stat">-</span> Close <span id="close3" class="stat">-</span></div>
-            </div>
-            <canvas id="chart3"></canvas>
-          </div>
-
-          <!-- Chart 4 -->
-          <div class="panel" id="panel4">
-            <div class="top-row">
-              <div><strong>Chart 4 — TV-like indicators & geometry</strong></div>
-              <div class="small">Chart 4</div>
-            </div>
-            <div class="controls">
-              <button class="btn" onclick="togglePanel(4)">Hide</button>
-              <button class="btn" onclick="zoomReset(4)">Reset Zoom</button>
-              <button class="btn" onclick="addLineAnnotation(4)">Add Line</button>
-              <button class="btn" onclick="toggleScale(4)">Scale 1x/2x</button>
-              <div style="margin-left:auto" class="small">Min <span id="min4" class="stat">-</span> Max <span id="max4" class="stat">-</span> Close <span id="close4" class="stat">-</span></div>
-            </div>
-            <canvas id="chart4"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="side-panel">
-        <div class="helper">
-          <div style="font-weight:600;margin-bottom:6px">Utilities</div>
-          <label>Refresh demo data</label>
-          <div class="row" style="margin-top:6px;">
-            <button class="btn primary" onclick="refreshAll()">Refresh Data</button>
-            <button class="btn" onclick="autoToggle()">Auto Update (5s)</button>
-          </div>
-          <div style="height:8px"></div>
-
-          <label>Price ⇄ Degree ⇄ Time helper</label>
-          <div style="display:grid;gap:6px;margin-top:6px">
-            <input id="priceInput" placeholder="Price (ex: 123.45)"/>
-            <div class="row"><button class="btn" onclick="priceToDegree()">Price → Degree</button><button class="btn" onclick="degreeToPrice()">Degree → Price</button></div>
-            <input id="degreeInput" placeholder="Degree (ex: 45)" />
-            <div class="row"><button class="btn" onclick="timeToPrice()">Time → Price</button><button class="btn" onclick="priceToTime()">Price → Time</button></div>
-            <div style="margin-top:8px"><label>Result</label><div id="convResult" class="small stat">—</div></div>
-          </div>
-        </div>
-
-        <div class="helper">
-          <div style="font-weight:600;margin-bottom:6px">Chart Controls</div>
-          <label>Select chart to export image</label>
-          <select id="chartSelect">
-            <option value="1">Chart 1</option>
-            <option value="2">Chart 2</option>
-            <option value="3">Chart 3</option>
-            <option value="4">Chart 4</option>
-          </select>
-          <div style="margin-top:8px" class="row"><button class="btn" onclick="exportChart()">Export PNG</button><button class="btn" onclick="toggleAll(true)">Show All</button></div>
-        </div>
-
-        <div class="helper">
-          <div style="font-weight:600;margin-bottom:6px">Notes</div>
-          <div class="small">This is demo UI. Connect charts to your backend endpoints (candles, ICT detect, Gann conversions). The line drawing uses Chart.js Annotation — you can extend to draw arcs/gann spirals later.</div>
-        </div>
-      </div>
+  <div class="container">
+    <h2>AstroQuant — Live Demo Dashboard (4 Charts)</h2>
+    <div class="grid">
+      <div class="chart-card"><div class="chart-title">Chart 1 — ICT Models <button onclick="togglePanel('ictPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart1"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Chart 2 — Gann <button onclick="togglePanel('gannPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart2"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Chart 3 — Math <button onclick="togglePanel('mathPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart3"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Chart 4 — Momentum <button onclick="togglePanel('algoPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart4"></canvas></div></div>
     </div>
   </div>
 
+  <!-- Panels -->
+  <div id="ictPanel" class="panel"><h4>ICT Signals</h4><div id="ictSignals"></div></div>
+  <div id="gannPanel" class="panel"><h4>Gann Signals</h4><div id="gannSignals"></div></div>
+  <div id="mathPanel" class="panel"><h4>Math Signals</h4><div id="mathSignals"></div></div>
+  <div id="algoPanel" class="panel"><h4>Momentum/Algo Signals</h4><div id="algoSignals"></div></div>
+
 <script>
-/* ============================
-  Demo data + chart creation
-   - Chart.js with zoom & annotation
-   - Simple drawing: addLineAnnotation(chartIndex)
-   - scale toggle alters y-range multiplier
- ============================ */
-Chart.register(ChartZoom);
-Chart.register(ChartAnnotation);
-
-// small helpers
-const now = ()=> new Date();
-const fmtTime = (d) => {
-  const hh = String(d.getHours()).padStart(2,'0');
-  const mm = String(d.getMinutes()).padStart(2,'0');
-  const ss = String(d.getSeconds()).padStart(2,'0');
-  return `${hh}:${mm}:${ss}`;
+/* ====== Chart Setup ====== */
+function makeChart(ctx,label,color){
+  return new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label,data:[],borderColor:color,borderWidth:2,pointRadius:0,tension:0.2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#9ddfff'}},y:{ticks:{color:'#9ddfff'}}},plugins:{legend:{display:false}}}});
+}
+const charts={
+  1:makeChart(document.getElementById('chart1'),'ICT','#66e0ff'),
+  2:makeChart(document.getElementById('chart2'),'Gann','#ffd07a'),
+  3:makeChart(document.getElementById('chart3'),'Math','#a8ff82'),
+  4:makeChart(document.getElementById('chart4'),'Momentum','#ff8a8a')
 };
+let buffers={1:[],2:[],3:[],4:[]};
 
-function generateSeries(points=60, startPrice=150) {
-  const data = [];
-  let p = startPrice;
-  for(let i=points-1;i>=0;i--){
-    const t = new Date(Date.now() - i*60*1000); // 1-minute sample
-    p += (Math.random()-0.45) * (startPrice*0.0025);
-    data.push({x: t, y: Number(p.toFixed(2))});
-  }
-  return data;
+/* ====== Fetch Live Data (AlphaVantage) ====== */
+const API_KEY=(window.ALPHAVANTAGE_API_KEY)||"demo"; // replace via env
+const SYMBOL=(window.SYMBOL)||"MSFT"; // "XAUUSD" with real key
+
+async function fetchLive(){
+  const url=`https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=1min&apikey=${API_KEY}`;
+  const r=await fetch(url); const j=await r.json();
+  const series=j["Time Series (1min)"];
+  if(!series){console.log("API limit or bad key");return;}
+  const data=Object.entries(series).map(([t,v])=>({t,close:+v["4. close"]})).reverse().slice(-80);
+  updateCharts(data);
 }
 
-let charts = {};
-let chartConfigs = {};
-let scaleState = {1:1,2:1,3:1,4:1};
-let autoUpdate = false;
-let autoTimer = null;
-
-function createChart(ctxId, label, color, data) {
-  const ctx = document.getElementById(ctxId).getContext('2d');
-  const cfg = {
-    type: 'line',
-    data: {
-      datasets: [{
-        label, data,
-        borderWidth:2, pointRadius:0, tension:0.25,
-        borderColor: color, backgroundColor: 'rgba(0,0,0,0)'
-      }]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      scales: {
-        x: {type:'time', time:{unit:'minute', tooltipFormat:'HH:mm'}, ticks:{color:'#9fbdb3'}},
-        y: {ticks:{color:'#9fbdb3'}}
-      },
-      plugins: {
-        legend:{display:false},
-        tooltip:{mode:'index', intersect:false},
-        zoom:{
-          pan:{enabled:true, mode:'xy', modifierKey:'ctrl'},
-          zoom:{wheel:{enabled:true}, pinch:{enabled:true}, mode:'y'}
-        },
-        annotation:{
-          annotations:{}
-        }
-      }
+/* ====== Update Charts & Run Models ====== */
+function updateCharts(data){
+  data.forEach(d=>{
+    for(const id in charts){
+      buffers[id].push(d.close);
+      if(buffers[id].length>80)buffers[id].shift();
+      const c=charts[id];c.data.labels.push(d.t);c.data.datasets[0].data.push(d.close);
+      if(c.data.labels.length>80){c.data.labels.shift();c.data.datasets[0].data.shift();}
+      c.update();
     }
-  };
-  const c = new Chart(ctx, cfg);
-  return c;
+    runDetectors(d);
+  });
 }
 
-// init
-function initAll(){
-  const d1 = generateSeries(90, 150);
-  const d2 = generateSeries(90, 140);
-  const d3 = generateSeries(90, 135);
-  const d4 = generateSeries(90, 155);
-
-  charts[1] = createChart('chart1','ICT', '#59f3d6', d1);
-  charts[2] = createChart('chart2','GANN', '#ffd47a', d2);
-  charts[3] = createChart('chart3','MATH', '#a0c7ff', d3);
-  charts[4] = createChart('chart4','TV-like', '#9aec7a', d4);
-
-  updateStatsAll();
+/* ====== Model Detectors ====== */
+// ICT: Order blocks + Turtle Soup
+function detectICT(arr){
+  const sigs=[]; if(arr.length<10) return sigs;
+  const last=arr[arr.length-1]; const prev=arr[arr.length-2];
+  if(last>prev*1.01) sigs.push({type:"Bullish OB",price:last.toFixed(2)});
+  if(last<prev*0.99) sigs.push({type:"Bearish OB",price:last.toFixed(2)});
+  // Turtle Soup: false breakout
+  const max=Math.max(...arr.slice(-6)), min=Math.min(...arr.slice(-6));
+  if(last>=max) sigs.push({type:"TurtleSoup Short",price:last.toFixed(2)});
+  if(last<=min) sigs.push({type:"TurtleSoup Long",price:last.toFixed(2)});
+  return sigs;
+}
+function detectGann(last){return[{type:"Price→Degree",val:(last%360).toFixed(2)}];}
+function detectMath(arr){
+  const sigs=[]; if(arr.length<21) return sigs;
+  const sma=(n)=>arr.slice(-n).reduce((a,b)=>a+b,0)/n;
+  const s7=sma(7), s21=sma(21), last=arr[arr.length-1];
+  if(s7>s21) sigs.push({type:"SMA Bull",price:last.toFixed(2)});
+  else sigs.push({type:"SMA Bear",price:last.toFixed(2)});
+  return sigs;
+}
+function detectAlgo(arr){
+  const sigs=[]; if(arr.length<14) return sigs;
+  const gains=arr.slice(-14).map((v,i,a)=>i?Math.max(0,v-a[i-1]):0);
+  const loss=arr.slice(-14).map((v,i,a)=>i?Math.max(0,a[i-1]-v):0);
+  const rs=(gains.reduce((a,b)=>a+b,0))/(loss.reduce((a,b)=>a+b,0)+1e-6);
+  const rsi=100-(100/(1+rs));
+  if(rsi>70) sigs.push({type:"RSI Overbought",val:rsi.toFixed(1)});
+  if(rsi<30) sigs.push({type:"RSI Oversold",val:rsi.toFixed(1)});
+  return sigs;
+}
+function runDetectors(d){
+  render("ictSignals",detectICT(buffers[1]));
+  render("gannSignals",detectGann(d.close));
+  render("mathSignals",detectMath(buffers[3]));
+  render("algoSignals",detectAlgo(buffers[4]));
+}
+function render(el,arr){
+  document.getElementById(el).innerHTML=arr.map(s=>`<div class="signal ${s.type.includes("Bull")||s.type.includes("Oversold")?"good":"bad"}">${s.type} ${s.price||s.val||""}</div>`).join("")||"<div>No signals</div>";
 }
 
-// Show / hide panels
-function togglePanel(n){
-  const el = document.getElementById('panel'+n);
-  if(!el) return;
-  const hidden = el.classList.toggle('hidden');
-  // Update button label
-  const btn = el.querySelector('.controls .btn');
-  if(btn) btn.textContent = hidden ? 'Show' : 'Hide';
+/* ====== Panels ====== */
+function togglePanel(id){
+  document.querySelectorAll('.panel').forEach(p=>{if(p.id!==id)p.style.display="none"});
+  const el=document.getElementById(id); el.style.display=(el.style.display==="block"?"none":"block");
 }
 
-// Toggle all
-function toggleAll(show){
-  for(let i=1;i<=4;i++){
-    const el = document.getElementById('panel'+i);
-    if(el) {
-      if(show) el.classList.remove('hidden'); else el.classList.add('hidden');
-      const b = el.querySelector('.controls .btn');
-      if(b) b.textContent = show ? 'Hide' : 'Show';
-    }
-  }
-}
-
-// Zoom reset
-function zoomReset(n){
-  const c = charts[n];
-  if(!c) return;
-  c.resetZoom();
-}
-
-// Add simple single line annotation (start & end)
-function addLineAnnotation(n){
-  const c = charts[n];
-  if(!c) return;
-  const ds = c.data.datasets[0];
-  const first = ds.data[0];
-  const last = ds.data[ds.data.length-1];
-  const name = 'line_' + Date.now();
-  const ann = {
-    type:'line',
-    xMin: first.x,
-    xMax: last.x,
-    yMin: first.y,
-    yMax: last.y,
-    borderColor: '#fff',
-    borderWidth:1.5,
-    label:{content:'draw', enabled:false}
-  };
-  c.options.plugins.annotation.annotations[name] = ann;
-  c.update();
-}
-
-// toggle scale multiplier (1x/2x)
-function toggleScale(n){
-  scaleState[n] = scaleState[n] === 1 ? 2 : 1;
-  const c = charts[n];
-  if(!c) return;
-  const ds = c.data.datasets[0].data.map(p => p.y);
-  const max = Math.max(...ds);
-  const min = Math.min(...ds);
-  const center = (max+min)/2;
-  const range = (max-min)/2 * scaleState[n];
-  c.options.scales.y.min = Math.max(0, center - range);
-  c.options.scales.y.max = center + range;
-  c.update();
-  updateStats(n);
-}
-
-// compute & show min/max/close for each chart
-function updateStats(n){
-  const c = charts[n];
-  if(!c) return;
-  const ds = c.data.datasets[0].data;
-  if(!ds || ds.length===0) return;
-  const values = ds.map(x=>x.y);
-  const min = Math.min(...values).toFixed(2);
-  const max = Math.max(...values).toFixed(2);
-  const close = values[values.length-1].toFixed(2);
-  document.getElementById('min'+n).textContent = min;
-  document.getElementById('max'+n).textContent = max;
-  document.getElementById('close'+n).textContent = close;
-}
-function updateStatsAll(){
-  for(let i=1;i<=4;i++) updateStats(i);
-}
-
-// Refresh data (demo)
-function refreshAll(){
-  for(let i=1;i<=4;i++){
-    const ds = generateSeries(90, 120 + 10*i);
-    charts[i].data.datasets[0].data = ds;
-    // reset y scale
-    charts[i].options.scales.y.min = undefined;
-    charts[i].options.scales.y.max = undefined;
-    charts[i].update();
-  }
-  updateStatsAll();
-}
-
-// auto update toggler
-function autoToggle(){
-  autoUpdate = !autoUpdate;
-  if(autoUpdate){
-    autoTimer = setInterval(()=> {
-      // append one new point to each
-      for(let i=1;i<=4;i++){
-        const ds = charts[i].data.datasets[0].data;
-        const last = ds[ds.length-1];
-        const newT = new Date(last.x.getTime() + 60*1000);
-        const newY = Number((last.y * (1 + (Math.random()-0.48)*0.0025)).toFixed(2));
-        ds.push({x:newT,y:newY});
-        if(ds.length>120) ds.shift();
-        charts[i].update('none');
-      }
-      updateStatsAll();
-    }, 5000);
-  } else {
-    clearInterval(autoTimer);
-  }
-}
-
-// export selected chart image
-function exportChart(){
-  const idx = Number(document.getElementById('chartSelect').value);
-  const c = charts[idx];
-  if(!c) return alert('chart not found');
-  const url = c.toBase64Image();
-  // open image
-  const w = window.open('');
-  w.document.write('<img src="'+url+'" style="max-width:100%"/>');
-}
-
-// conversion helpers (replace with real Gann formulas later)
-function priceToDegree(){
-  const p = Number(document.getElementById('priceInput').value || 0);
-  const deg = (p % 360).toFixed(2);
-  document.getElementById('convResult').textContent = `Degree: ${deg}° (demo)`;
-}
-function degreeToPrice(){
-  const d = Number(document.getElementById('degreeInput').value || 0);
-  const price = (100 + (d*0.5)).toFixed(2);
-  document.getElementById('convResult').textContent = `Price ~ ${price} (demo)`;
-}
-function timeToPrice(){
-  const now = new Date();
-  const price = (120 + now.getHours() + now.getMinutes()/60).toFixed(2);
-  document.getElementById('convResult').textContent = `Time→Price ${price} (demo)`;
-}
-function priceToTime(){
-  const p = Number(document.getElementById('priceInput').value || 0);
-  const hours = Math.floor((p % 24));
-  document.getElementById('convResult').textContent = `Hour ~ ${hours}:00 (demo)`;
-}
-function degreeToTime(){ /* implement when needed */ }
-
-// initial run
-initAll();
-
-/* ========= Placeholders for wiring real backend ===========
-Examples (uncomment and replace URL):
-fetch('/api/candles?symbol=XXX').then(r=>r.json()).then(data=>{
-  charts[1].data.datasets[0].data = data.map(d=>({x:new Date(d.t), y:d.close}));
-  charts[1].update();
-});
-
-For ICT detection:
-fetch('/api/ict/detect',{method:'POST', body:JSON.stringify({candles})})
-  .then(...)
-
-Gann conversions:
-fetch('/api/gann/convert',...)
-=========================================================== */
-
+/* ====== Init ====== */
+fetchLive(); setInterval(fetchLive,60000); // refresh each min
 </script>
 </body>
 </html>
