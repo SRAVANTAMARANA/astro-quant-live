@@ -1,38 +1,393 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>AstroQuant — Live Test</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AstroQuant — Demo Dashboard (4 Charts)</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
-    body{font-family:Inter,Arial,Helvetica,sans-serif;background:#0b1020;color:#dbe7ff;margin:0;padding:32px}
-    .wrap{max-width:900px;margin:40px auto;background:rgba(255,255,255,0.03);padding:28px;border-radius:12px;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
-    h1{margin:0 0 10px;font-size:28px}
-    p{margin:6px 0;color:#a9c0ff}
-    .ok{color:#9be79b;font-weight:700}
-    .hint{color:#cde0ff;font-size:13px}
-    a{color:#a6d3ff}
+    :root{
+      --bg:#0f1720;
+      --card:#0b1220;
+      --muted:#a9b3c2;
+      --accent:#6ee7b7;
+      --panel:#0b1a2b;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071124,#071722);color:#e6eef6;font-family:Inter,Segoe UI,Roboto,Arial;}
+    .container{max-width:1200px;margin:18px auto;padding:12px;}
+    h1{font-size:20px;margin:6px 0 18px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.02)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .chart-wrap{height:320px;padding:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border-radius:8px}
+    canvas{max-height:100%;width:100% !important;height:260px !important;}
+    .controls{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    button{background:var(--panel);color:var(--accent);border:1px solid rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;cursor:pointer}
+    button.secondary{background:transparent;color:var(--muted);border:1px dashed rgba(255,255,255,0.03)}
+    label.small{font-size:12px;color:var(--muted)}
+    .small{font-size:13px;color:var(--muted)}
+    .status{font-size:13px;color:var(--muted);margin-left:8px}
+    input[type="number"],input[type="text"],select{background:var(--panel);border:1px solid rgba(255,255,255,0.03);padding:6px;border-radius:6px;color:#dff;min-width:140px}
+    .badge{background:rgba(255,255,255,0.03);padding:6px;border-radius:6px;color:var(--muted);font-size:13px;margin-left:auto}
+    .right{margin-left:auto}
+    pre{white-space:pre-wrap;color:var(--muted);font-size:13px}
+    .detection{font-size:13px;color:#aee7ff}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>AstroQuant — Live test page</h1>
-    <p class="hint">This is a minimal static frontend used to verify the Render blueprint deploy.</p>
-    <p>Backend health check (example): <a id="healthLink" href="#" target="_blank">Check now</a></p>
-    <p id="health" class="hint">Backend status: <span id="stat">unknown</span></p>
-    <hr/>
-    <p class="hint">When backend is available, this will show <span class="ok">OK</span>.</p>
-    <p>Project: <b>AstroQuant</b></p>
+  <div class="container">
+    <h1>AstroQuant — Demo Dashboard (4 charts)</h1>
+
+    <div class="grid">
+      <!-- Chart 1 — ICT model visualization -->
+      <div class="card">
+        <div class="row">
+          <strong>ICT Model (auto-detect)</strong>
+          <span class="badge">Chart 1</span>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart-ict"></canvas>
+        </div>
+
+        <div class="controls">
+          <button id="btn-ict-refresh">Refresh Data</button>
+          <button id="btn-ict-detect">Auto-detect ICT</button>
+          <label class="small">Scale:
+            <select id="ict-scale">
+              <option value="1">1x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </label>
+          <div id="ict-info" class="status small">Max:<span id="ict-max" style="margin-left:6px">—</span> Min:<span id="ict-min" style="margin-left:6px">—</span> Close:<span id="ict-close" style="margin-left:6px">—</span></div>
+          <div id="ict-detect-result" class="detection"></div>
+        </div>
+      </div>
+
+      <!-- Chart 2 — Gann / Time-degree -->
+      <div class="card">
+        <div class="row">
+          <strong>Gann / Conversions</strong>
+          <span class="badge">Chart 2</span>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart-gann"></canvas>
+        </div>
+
+        <div class="controls">
+          <label class="small">Price:
+            <input id="gann-price" type="number" value="250" />
+          </label>
+          <button id="btn-gann-convert">Price → Degree</button>
+          <div class="small" id="gann-output">degree: —</div>
+          <button id="btn-gann-refresh">Refresh Chart</button>
+        </div>
+      </div>
+
+      <!-- Chart 3 — Math/Algo (SMA) -->
+      <div class="card">
+        <div class="row">
+          <strong>Math / Algo — SMA, Volatility</strong>
+          <span class="badge">Chart 3</span>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart-math"></canvas>
+        </div>
+
+        <div class="controls">
+          <button id="btn-math-refresh">Refresh</button>
+          <label class="small">SMA length:
+            <input id="sma-length" type="number" value="10" min="2" max="200"/>
+          </label>
+          <div class="status small">Max:<span id="math-max" style="margin-left:6px">—</span> Min:<span id="math-min" style="margin-left:6px">—</span> Close:<span id="math-close" style="margin-left:6px">—</span></div>
+        </div>
+      </div>
+
+      <!-- Chart 4 — Trading chart w/ indicators -->
+      <div class="card">
+        <div class="row">
+          <strong>Trading Chart — Indicators</strong>
+          <span class="badge">Chart 4</span>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart-trade"></canvas>
+        </div>
+
+        <div class="controls">
+          <button id="btn-trade-refresh">Refresh</button>
+          <label class="small">Symbol:
+            <input id="trade-symbol" type="text" value="DEMO"/>
+          </label>
+          <button id="btn-predict">Get Prediction</button>
+          <div id="predict-out" class="small" style="margin-left:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <hr style="margin:18px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)"/>
+    <div class="card" style="padding:12px">
+      <strong>Notes / How it works</strong>
+      <p class="small" style="margin:6px 0">
+        This demo uses Chart.js to draw 4 charts. The buttons call demo backend endpoints:
+        <code class="small">/ict/detect</code>, <code class="small">/predict</code> and <code class="small">/gann/convert</code>.
+        The backend needs to be running and serving the frontend (see backend server).
+      </p>
+      <pre id="log" style="height:60px;overflow:auto;background:var(--glass);padding:8px;border-radius:6px"></pre>
+    </div>
   </div>
 
-  <script>
-    const healthUrl = 'https://astro-quant-live-backend.onrender.com/health';
-    document.getElementById('healthLink').href = healthUrl;
-    fetch(healthUrl).then(r=>r.json()).then(j=>{
-      document.getElementById('stat').textContent = JSON.stringify(j);
-    }).catch(e=>{
-      document.getElementById('stat').textContent = 'unreachable';
-    });
-  </script>
+<script>
+/* ---------- Utility demo data functions ---------- */
+function randomCandleSet(points = 80, startPrice = 100){
+  const now = Date.now();
+  const candles = [];
+  let p = startPrice;
+  for(let i=0;i<points;i++){
+    const t = now - (points-i)*60000; // 1m step
+    const open = p;
+    const close = +(open + (Math.random()-0.45)*2).toFixed(2);
+    const high = Math.max(open, close) + Math.random()*1.5;
+    const low = Math.min(open, close) - Math.random()*1.5;
+    p = close;
+    candles.push({t, open, high, low, close});
+  }
+  return candles;
+}
+
+function candlesToSeries(candles){
+  return {
+    labels: candles.map(c=>new Date(c.t).toLocaleTimeString()),
+    closes: candles.map(c=>c.close),
+    highs: candles.map(c=>c.high),
+    lows: candles.map(c=>c.low),
+    opens: candles.map(c=>c.open)
+  };
+}
+
+function log(msg){
+  const el = document.getElementById('log');
+  el.textContent = (new Date()).toLocaleTimeString() + ' — ' + msg + '\n' + el.textContent;
+}
+
+/* ---------- Create Chart.js charts ---------- */
+const chartConfigBase = {
+  type:'line',
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{x:{grid:{color:'rgba(255,255,255,0.02)'},ticks:{color:'#9fb7d0'}},y:{ticks:{color:'#9fb7d0'},grid:{color:'rgba(255,255,255,0.02)'}}}
+  }
+};
+
+let chartICT, chartGann, chartMath, chartTrade;
+
+function createCharts(){
+  // ICT
+  const ctx1 = document.getElementById('chart-ict').getContext('2d');
+  chartICT = new Chart(ctx1, JSON.parse(JSON.stringify(chartConfigBase)));
+  // Gann
+  const ctx2 = document.getElementById('chart-gann').getContext('2d');
+  chartGann = new Chart(ctx2, JSON.parse(JSON.stringify(chartConfigBase)));
+  // Math
+  const ctx3 = document.getElementById('chart-math').getContext('2d');
+  chartMath = new Chart(ctx3, JSON.parse(JSON.stringify(chartConfigBase)));
+  // Trade
+  const ctx4 = document.getElementById('chart-trade').getContext('2d');
+  chartTrade = new Chart(ctx4, JSON.parse(JSON.stringify(chartConfigBase)));
+}
+
+function updateICT(candles){
+  const s = candlesToSeries(candles);
+  if(chartICT.data.datasets.length===0){
+    chartICT.data.labels = s.labels;
+    chartICT.data.datasets = [
+      {label:'close',data:s.closes,borderColor:'#6ee7b7',tension:0.12,pointRadius:0}
+    ];
+  } else {
+    chartICT.data.labels = s.labels;
+    chartICT.data.datasets[0].data = s.closes;
+  }
+  chartICT.update();
+
+  // show max/min/close
+  document.getElementById('ict-max').textContent = Math.max(...s.closes).toFixed(2);
+  document.getElementById('ict-min').textContent = Math.min(...s.closes).toFixed(2);
+  document.getElementById('ict-close').textContent = s.closes[s.closes.length-1].toFixed(2);
+}
+
+function updateGann(candles){
+  const s = candlesToSeries(candles);
+  // Show closes wrapped 0-360 degrees (demo)
+  const deg = s.closes.map(v=>v % 360);
+  if(chartGann.data.datasets.length===0){
+    chartGann.data.labels = s.labels;
+    chartGann.data.datasets = [{label:'degreeMapping',data:deg,borderColor:'#ffd166',tension:0.12,pointRadius:0}];
+  } else {
+    chartGann.data.labels = s.labels;
+    chartGann.data.datasets[0].data = deg;
+  }
+  chartGann.update();
+}
+
+function sma(series, length=10){
+  const out = [];
+  for(let i=0;i<series.length;i++){
+    const start = Math.max(0,i-length+1);
+    const slice = series.slice(start,i+1);
+    const avg = slice.reduce((a,b)=>a+b,0)/slice.length;
+    out.push(+avg.toFixed(4));
+  }
+  return out;
+}
+
+function updateMath(candles){
+  const s = candlesToSeries(candles);
+  const closes = s.closes;
+  const length = Number(document.getElementById('sma-length').value) || 10;
+  const smaSeries = sma(closes,length);
+
+  if(chartMath.data.datasets.length===0){
+    chartMath.data.labels = s.labels;
+    chartMath.data.datasets = [
+      {label:'close',data:closes,borderColor:'#93c5fd',tension:0.12,pointRadius:0},
+      {label:'SMA',data:smaSeries,borderColor:'#fb7185',tension:0.12,pointRadius:0}
+    ];
+  } else {
+    chartMath.data.labels = s.labels;
+    chartMath.data.datasets[0].data = closes;
+    chartMath.data.datasets[1].data = smaSeries;
+  }
+  chartMath.update();
+  document.getElementById('math-max').textContent = Math.max(...closes).toFixed(2);
+  document.getElementById('math-min').textContent = Math.min(...closes).toFixed(2);
+  document.getElementById('math-close').textContent = closes[closes.length-1].toFixed(2);
+}
+
+function updateTrade(candles){
+  const s = candlesToSeries(candles);
+  // add a simple 20-period SMA as indicator
+  const sma20 = sma(s.closes,20);
+
+  if(chartTrade.data.datasets.length===0){
+    chartTrade.data.labels = s.labels;
+    chartTrade.data.datasets = [
+      {label:'close',data:s.closes,borderColor:'#a78bfa',tension:0.12,pointRadius:0},
+      {label:'SMA20',data:sma20,borderColor:'#34d399',tension:0.12,pointRadius:0}
+    ];
+  } else {
+    chartTrade.data.labels = s.labels;
+    chartTrade.data.datasets[0].data = s.closes;
+    chartTrade.data.datasets[1].data = sma20;
+  }
+  chartTrade.update();
+}
+
+/* ---------- Demo backend calls ---------- */
+
+const BASE = window.location.origin; // backend serves frontend
+
+async function callIctDetect(candles){
+  try{
+    log('Calling /ict/detect (demo)');
+    const payload = {symbol:'DEMO', candles: candles.map(c=>[c.t,c.open,c.high,c.low,c.close])};
+    const res = await fetch(BASE + '/ict/detect', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok) throw new Error('ICT detect failed');
+    const json = await res.json();
+    document.getElementById('ict-detect-result').textContent = 'Detected: ' + (json.detected_models?.map(m=>m.name+'('+Math.round(m.confidence*100)+'%)').join(', ') || 'none');
+    log('ICT detect success');
+  }catch(err){
+    log('ICT detect error: ' + err.message);
+    document.getElementById('ict-detect-result').textContent = 'Detect failed';
+  }
+}
+
+async function callPredict(symbol='DEMO'){
+  try{
+    const payload = {symbol, timeframe:'1h'};
+    log('Calling /predict (demo)');
+    const res = await fetch(BASE + '/predict', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    const j = await res.json();
+    document.getElementById('predict-out').textContent = `${j.prediction.direction} @ ${j.prediction.target_price} (conf ${Math.round(j.prediction.confidence*100)}%)`;
+    log('Predict success');
+  } catch(e){
+    log('Predict error: ' + e.message);
+  }
+}
+
+async function callGannPriceToDegree(price){
+  try{
+    const u = `${BASE}/gann/convert?type=price_to_degree&value=${encodeURIComponent(price)}`;
+    log('Calling /gann/convert ? price=' + price);
+    const r = await fetch(u);
+    const j = await r.json();
+    document.getElementById('gann-output').textContent = 'degree: ' + (j.degree ?? 'N/A');
+    log('Gann convert success');
+  } catch(e){
+    log('Gann convert error: ' + e.message);
+  }
+}
+
+/* ---------- Wiring UI ---------- */
+
+function wireUI(){
+  document.getElementById('btn-ict-refresh').addEventListener('click', ()=> {
+    const candles = randomCandleSet(120,110);
+    updateICT(candles);
+    updateGann(candles);
+  });
+  document.getElementById('btn-ict-detect').addEventListener('click', async ()=> {
+    const candles = randomCandleSet(120,110);
+    await callIctDetect(candles);
+  });
+  document.getElementById('ict-scale').addEventListener('change',(e)=>{
+    const v = Number(e.target.value);
+    document.getElementById('chart-ict').style.height = (260 * v) + 'px';
+    chartICT.resize();
+  });
+
+  document.getElementById('btn-gann-convert').addEventListener('click', ()=>{
+    const p = Number(document.getElementById('gann-price').value || 0);
+    callGannPriceToDegree(p);
+  });
+  document.getElementById('btn-gann-refresh').addEventListener('click', ()=>{
+    const candles = randomCandleSet(120,200);
+    updateGann(candles);
+  });
+
+  document.getElementById('btn-math-refresh').addEventListener('click', ()=>{
+    updateMath(randomCandleSet(200,120));
+  });
+
+  document.getElementById('btn-trade-refresh').addEventListener('click', ()=>{
+    updateTrade(randomCandleSet(200,135));
+  });
+
+  document.getElementById('btn-predict').addEventListener('click', ()=>{
+    const symbol = document.getElementById('trade-symbol').value || 'DEMO';
+    callPredict(symbol);
+  });
+}
+
+/* ---------- Init ---------- */
+createCharts();
+wireUI();
+
+// populate with initial data
+const baseCandles = randomCandleSet(160,120);
+updateICT(baseCandles);
+updateGann(baseCandles);
+updateMath(baseCandles);
+updateTrade(baseCandles);
+
+log('Frontend demo loaded — ready.');
+</script>
 </body>
 </html>
