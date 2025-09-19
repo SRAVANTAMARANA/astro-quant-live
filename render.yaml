@@ -3,31 +3,21 @@ services:
     name: astro-quant-live-backend
     env: python
     plan: free
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.server:app --host 0.0.0.0 --port $PORT
     branch: main
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r backend/requirements.txt
-    startCommand: |
-      cd backend
-      uvicorn server:app --host 0.0.0.0 --port $PORT --workers 2
-    envVars:
-      - key: AQ_DB_URL
-        sync: false
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_ID
-        sync: false
+    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
 
   - type: web
     name: astro-quant-live-frontend
     env: node
     plan: free
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
-    branch: main
     buildCommand: |
-      # no compile/build step required for simple static frontend
-      npm i -g serve
+      cd frontend
+      if [ -f yarn.lock ]; then yarn install; else npm install; fi
+      npm run build || yarn build
     startCommand: |
       cd frontend
-      serve -s . -l $PORT
+      npx serve -s build -l $PORT
+    branch: main
+    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
