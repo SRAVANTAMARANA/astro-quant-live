@@ -31,8 +31,10 @@ services:
       - key: ALERT_EMAILS
         sync: false
 
-  - type: static_site
+  - type: web
     name: astro-quant-live-frontend
+    env: static
+    plan: free
     repo: SRAVANTAMARANA/astro-quant-live
     branch: main
     buildCommand: |
