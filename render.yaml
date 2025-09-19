@@ -1,18 +1,13 @@
 services:
   - type: web
-    name: astro-quant-backend
+    name: astro-quant-live-backend
     env: python
     plan: free
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
+    repo: SRAVANTAMARANA/astro-quant-live
     branch: main
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
-
-  - type: static
-    name: astro-quant-frontend
-    repo: https://github.com/SRAVANTAMARANA/astro-quant-live
-    branch: main
-    rootDir: frontend
-    buildCommand: ""   # If using plain HTML
-    publishDir: frontend
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r backend/requirements.txt
+    startCommand: |
+      cd backend
+      uvicorn server:app --host 0.0.0.0 --port $PORT --workers 2 --loop uvloop
