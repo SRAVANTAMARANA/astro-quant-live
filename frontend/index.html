@@ -1,393 +1,414 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>AstroQuant — Demo Dashboard (4 Charts)</title>
-
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+  <meta charset="utf-8" />
+  <title>AstroQuant — 4 Chart Panel (Demo)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <!-- zoom plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <!-- annotation plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.2/dist/chartjs-plugin-annotation.min.js"></script>
   <style>
     :root{
-      --bg:#0f1720;
-      --card:#0b1220;
-      --muted:#a9b3c2;
-      --accent:#6ee7b7;
-      --panel:#0b1a2b;
-      --glass: rgba(255,255,255,0.03);
+      --bg:#081018; --panel:#0f1720; --accent:#25e1c6; --muted:#9aa7b3; --card:#0b1220;
     }
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071124,#071722);color:#e6eef6;font-family:Inter,Segoe UI,Roboto,Arial;}
-    .container{max-width:1200px;margin:18px auto;padding:12px;}
-    h1{font-size:20px;margin:6px 0 18px}
+    body{font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#04060a 0%, #061924 100%); color:#e6f6f3; margin:0; -webkit-font-smoothing:antialiased;}
+    .wrap{max-width:1200px;margin:18px auto;padding:12px;}
+    header{display:flex;gap:12px;align-items:center; margin-bottom:12px;}
+    header h1{font-size:20px;margin:0;color:var(--accent)}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.02)}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .chart-wrap{height:320px;padding:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border-radius:8px}
-    canvas{max-height:100%;width:100% !important;height:260px !important;}
-    .controls{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    button{background:var(--panel);color:var(--accent);border:1px solid rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;cursor:pointer}
-    button.secondary{background:transparent;color:var(--muted);border:1px dashed rgba(255,255,255,0.03)}
-    label.small{font-size:12px;color:var(--muted)}
+    .panel{background:var(--panel);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.5); position:relative}
+    .panel .controls{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+    .btn{background:#0b1620;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:7px;color:var(--muted);cursor:pointer}
+    .btn.primary{background:var(--accent);color:#022623}
+    canvas{background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0)); border-radius:6px; display:block; width:100% !important; height:320px !important}
     .small{font-size:13px;color:var(--muted)}
-    .status{font-size:13px;color:var(--muted);margin-left:8px}
-    input[type="number"],input[type="text"],select{background:var(--panel);border:1px solid rgba(255,255,255,0.03);padding:6px;border-radius:6px;color:#dff;min-width:140px}
-    .badge{background:rgba(255,255,255,0.03);padding:6px;border-radius:6px;color:var(--muted);font-size:13px;margin-left:auto}
-    .right{margin-left:auto}
-    pre{white-space:pre-wrap;color:var(--muted);font-size:13px}
-    .detection{font-size:13px;color:#aee7ff}
+    .side-panel{display:flex;flex-direction:column;gap:10px;margin-left:12px; min-width:260px}
+    .top-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .helper{background:#07121a;padding:10px;border-radius:8px}
+    label{font-size:12px;color:var(--muted)}
+    input, select{background:#07121a;border:1px solid rgba(255,255,255,0.04);padding:6px;color:#cfeee6;border-radius:6px;width:100%}
+    .row{display:flex;gap:8px}
+    .stat{font-weight:600;color:#e6ffef}
+    .hidden{display:none}
+    @media(max-width:900px){ .grid{grid-template-columns:1fr} .side-panel{min-width:unset;margin-left:0} canvas{height:260px !important} }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AstroQuant — Demo Dashboard (4 charts)</h1>
+  <div class="wrap">
+    <header>
+      <h1>AstroQuant — Demo Dashboard (4 charts)</h1>
+      <div class="small">Interactive: zoom/pan, draw lines, min/max/close display</div>
+    </header>
 
-    <div class="grid">
-      <!-- Chart 1 — ICT model visualization -->
-      <div class="card">
-        <div class="row">
-          <strong>ICT Model (auto-detect)</strong>
-          <span class="badge">Chart 1</span>
-        </div>
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div style="flex:1">
+        <div class="grid">
+          <!-- Chart 1 -->
+          <div class="panel" id="panel1">
+            <div class="top-row">
+              <div><strong>Chart 1 — ICT Model (auto detect)</strong></div>
+              <div class="small">Chart 1</div>
+            </div>
+            <div class="controls">
+              <button class="btn" onclick="togglePanel(1)">Hide</button>
+              <button class="btn" onclick="zoomReset(1)">Reset Zoom</button>
+              <button class="btn" onclick="addLineAnnotation(1)">Add Line</button>
+              <button class="btn" onclick="toggleScale(1)">Scale 1x/2x</button>
+              <div style="margin-left:auto" class="small">Min <span id="min1" class="stat">-</span> Max <span id="max1" class="stat">-</span> Close <span id="close1" class="stat">-</span></div>
+            </div>
+            <canvas id="chart1"></canvas>
+          </div>
 
-        <div class="chart-wrap">
-          <canvas id="chart-ict"></canvas>
-        </div>
+          <!-- Chart 2 -->
+          <div class="panel" id="panel2">
+            <div class="top-row">
+              <div><strong>Chart 2 — Gann / Conversions</strong></div>
+              <div class="small">Chart 2</div>
+            </div>
+            <div class="controls">
+              <button class="btn" onclick="togglePanel(2)">Hide</button>
+              <button class="btn" onclick="zoomReset(2)">Reset Zoom</button>
+              <button class="btn" onclick="addLineAnnotation(2)">Add Line</button>
+              <button class="btn" onclick="toggleScale(2)">Scale 1x/2x</button>
+              <div style="margin-left:auto" class="small">Min <span id="min2" class="stat">-</span> Max <span id="max2" class="stat">-</span> Close <span id="close2" class="stat">-</span></div>
+            </div>
+            <canvas id="chart2"></canvas>
+          </div>
 
-        <div class="controls">
-          <button id="btn-ict-refresh">Refresh Data</button>
-          <button id="btn-ict-detect">Auto-detect ICT</button>
-          <label class="small">Scale:
-            <select id="ict-scale">
-              <option value="1">1x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
-            </select>
-          </label>
-          <div id="ict-info" class="status small">Max:<span id="ict-max" style="margin-left:6px">—</span> Min:<span id="ict-min" style="margin-left:6px">—</span> Close:<span id="ict-close" style="margin-left:6px">—</span></div>
-          <div id="ict-detect-result" class="detection"></div>
-        </div>
-      </div>
+          <!-- Chart 3 -->
+          <div class="panel" id="panel3">
+            <div class="top-row">
+              <div><strong>Chart 3 — Math / Algo signals</strong></div>
+              <div class="small">Chart 3</div>
+            </div>
+            <div class="controls">
+              <button class="btn" onclick="togglePanel(3)">Hide</button>
+              <button class="btn" onclick="zoomReset(3)">Reset Zoom</button>
+              <button class="btn" onclick="addLineAnnotation(3)">Add Line</button>
+              <button class="btn" onclick="toggleScale(3)">Scale 1x/2x</button>
+              <div style="margin-left:auto" class="small">Min <span id="min3" class="stat">-</span> Max <span id="max3" class="stat">-</span> Close <span id="close3" class="stat">-</span></div>
+            </div>
+            <canvas id="chart3"></canvas>
+          </div>
 
-      <!-- Chart 2 — Gann / Time-degree -->
-      <div class="card">
-        <div class="row">
-          <strong>Gann / Conversions</strong>
-          <span class="badge">Chart 2</span>
-        </div>
-
-        <div class="chart-wrap">
-          <canvas id="chart-gann"></canvas>
-        </div>
-
-        <div class="controls">
-          <label class="small">Price:
-            <input id="gann-price" type="number" value="250" />
-          </label>
-          <button id="btn-gann-convert">Price → Degree</button>
-          <div class="small" id="gann-output">degree: —</div>
-          <button id="btn-gann-refresh">Refresh Chart</button>
-        </div>
-      </div>
-
-      <!-- Chart 3 — Math/Algo (SMA) -->
-      <div class="card">
-        <div class="row">
-          <strong>Math / Algo — SMA, Volatility</strong>
-          <span class="badge">Chart 3</span>
-        </div>
-
-        <div class="chart-wrap">
-          <canvas id="chart-math"></canvas>
-        </div>
-
-        <div class="controls">
-          <button id="btn-math-refresh">Refresh</button>
-          <label class="small">SMA length:
-            <input id="sma-length" type="number" value="10" min="2" max="200"/>
-          </label>
-          <div class="status small">Max:<span id="math-max" style="margin-left:6px">—</span> Min:<span id="math-min" style="margin-left:6px">—</span> Close:<span id="math-close" style="margin-left:6px">—</span></div>
-        </div>
-      </div>
-
-      <!-- Chart 4 — Trading chart w/ indicators -->
-      <div class="card">
-        <div class="row">
-          <strong>Trading Chart — Indicators</strong>
-          <span class="badge">Chart 4</span>
-        </div>
-
-        <div class="chart-wrap">
-          <canvas id="chart-trade"></canvas>
-        </div>
-
-        <div class="controls">
-          <button id="btn-trade-refresh">Refresh</button>
-          <label class="small">Symbol:
-            <input id="trade-symbol" type="text" value="DEMO"/>
-          </label>
-          <button id="btn-predict">Get Prediction</button>
-          <div id="predict-out" class="small" style="margin-left:auto"></div>
+          <!-- Chart 4 -->
+          <div class="panel" id="panel4">
+            <div class="top-row">
+              <div><strong>Chart 4 — TV-like indicators & geometry</strong></div>
+              <div class="small">Chart 4</div>
+            </div>
+            <div class="controls">
+              <button class="btn" onclick="togglePanel(4)">Hide</button>
+              <button class="btn" onclick="zoomReset(4)">Reset Zoom</button>
+              <button class="btn" onclick="addLineAnnotation(4)">Add Line</button>
+              <button class="btn" onclick="toggleScale(4)">Scale 1x/2x</button>
+              <div style="margin-left:auto" class="small">Min <span id="min4" class="stat">-</span> Max <span id="max4" class="stat">-</span> Close <span id="close4" class="stat">-</span></div>
+            </div>
+            <canvas id="chart4"></canvas>
+          </div>
         </div>
       </div>
-    </div>
 
-    <hr style="margin:18px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)"/>
-    <div class="card" style="padding:12px">
-      <strong>Notes / How it works</strong>
-      <p class="small" style="margin:6px 0">
-        This demo uses Chart.js to draw 4 charts. The buttons call demo backend endpoints:
-        <code class="small">/ict/detect</code>, <code class="small">/predict</code> and <code class="small">/gann/convert</code>.
-        The backend needs to be running and serving the frontend (see backend server).
-      </p>
-      <pre id="log" style="height:60px;overflow:auto;background:var(--glass);padding:8px;border-radius:6px"></pre>
+      <div class="side-panel">
+        <div class="helper">
+          <div style="font-weight:600;margin-bottom:6px">Utilities</div>
+          <label>Refresh demo data</label>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn primary" onclick="refreshAll()">Refresh Data</button>
+            <button class="btn" onclick="autoToggle()">Auto Update (5s)</button>
+          </div>
+          <div style="height:8px"></div>
+
+          <label>Price ⇄ Degree ⇄ Time helper</label>
+          <div style="display:grid;gap:6px;margin-top:6px">
+            <input id="priceInput" placeholder="Price (ex: 123.45)"/>
+            <div class="row"><button class="btn" onclick="priceToDegree()">Price → Degree</button><button class="btn" onclick="degreeToPrice()">Degree → Price</button></div>
+            <input id="degreeInput" placeholder="Degree (ex: 45)" />
+            <div class="row"><button class="btn" onclick="timeToPrice()">Time → Price</button><button class="btn" onclick="priceToTime()">Price → Time</button></div>
+            <div style="margin-top:8px"><label>Result</label><div id="convResult" class="small stat">—</div></div>
+          </div>
+        </div>
+
+        <div class="helper">
+          <div style="font-weight:600;margin-bottom:6px">Chart Controls</div>
+          <label>Select chart to export image</label>
+          <select id="chartSelect">
+            <option value="1">Chart 1</option>
+            <option value="2">Chart 2</option>
+            <option value="3">Chart 3</option>
+            <option value="4">Chart 4</option>
+          </select>
+          <div style="margin-top:8px" class="row"><button class="btn" onclick="exportChart()">Export PNG</button><button class="btn" onclick="toggleAll(true)">Show All</button></div>
+        </div>
+
+        <div class="helper">
+          <div style="font-weight:600;margin-bottom:6px">Notes</div>
+          <div class="small">This is demo UI. Connect charts to your backend endpoints (candles, ICT detect, Gann conversions). The line drawing uses Chart.js Annotation — you can extend to draw arcs/gann spirals later.</div>
+        </div>
+      </div>
     </div>
   </div>
 
 <script>
-/* ---------- Utility demo data functions ---------- */
-function randomCandleSet(points = 80, startPrice = 100){
-  const now = Date.now();
-  const candles = [];
-  let p = startPrice;
-  for(let i=0;i<points;i++){
-    const t = now - (points-i)*60000; // 1m step
-    const open = p;
-    const close = +(open + (Math.random()-0.45)*2).toFixed(2);
-    const high = Math.max(open, close) + Math.random()*1.5;
-    const low = Math.min(open, close) - Math.random()*1.5;
-    p = close;
-    candles.push({t, open, high, low, close});
-  }
-  return candles;
-}
+/* ============================
+  Demo data + chart creation
+   - Chart.js with zoom & annotation
+   - Simple drawing: addLineAnnotation(chartIndex)
+   - scale toggle alters y-range multiplier
+ ============================ */
+Chart.register(ChartZoom);
+Chart.register(ChartAnnotation);
 
-function candlesToSeries(candles){
-  return {
-    labels: candles.map(c=>new Date(c.t).toLocaleTimeString()),
-    closes: candles.map(c=>c.close),
-    highs: candles.map(c=>c.high),
-    lows: candles.map(c=>c.low),
-    opens: candles.map(c=>c.open)
-  };
-}
-
-function log(msg){
-  const el = document.getElementById('log');
-  el.textContent = (new Date()).toLocaleTimeString() + ' — ' + msg + '\n' + el.textContent;
-}
-
-/* ---------- Create Chart.js charts ---------- */
-const chartConfigBase = {
-  type:'line',
-  options:{
-    responsive:true,
-    plugins:{legend:{display:false}},
-    scales:{x:{grid:{color:'rgba(255,255,255,0.02)'},ticks:{color:'#9fb7d0'}},y:{ticks:{color:'#9fb7d0'},grid:{color:'rgba(255,255,255,0.02)'}}}
-  }
+// small helpers
+const now = ()=> new Date();
+const fmtTime = (d) => {
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const ss = String(d.getSeconds()).padStart(2,'0');
+  return `${hh}:${mm}:${ss}`;
 };
 
-let chartICT, chartGann, chartMath, chartTrade;
-
-function createCharts(){
-  // ICT
-  const ctx1 = document.getElementById('chart-ict').getContext('2d');
-  chartICT = new Chart(ctx1, JSON.parse(JSON.stringify(chartConfigBase)));
-  // Gann
-  const ctx2 = document.getElementById('chart-gann').getContext('2d');
-  chartGann = new Chart(ctx2, JSON.parse(JSON.stringify(chartConfigBase)));
-  // Math
-  const ctx3 = document.getElementById('chart-math').getContext('2d');
-  chartMath = new Chart(ctx3, JSON.parse(JSON.stringify(chartConfigBase)));
-  // Trade
-  const ctx4 = document.getElementById('chart-trade').getContext('2d');
-  chartTrade = new Chart(ctx4, JSON.parse(JSON.stringify(chartConfigBase)));
+function generateSeries(points=60, startPrice=150) {
+  const data = [];
+  let p = startPrice;
+  for(let i=points-1;i>=0;i--){
+    const t = new Date(Date.now() - i*60*1000); // 1-minute sample
+    p += (Math.random()-0.45) * (startPrice*0.0025);
+    data.push({x: t, y: Number(p.toFixed(2))});
+  }
+  return data;
 }
 
-function updateICT(candles){
-  const s = candlesToSeries(candles);
-  if(chartICT.data.datasets.length===0){
-    chartICT.data.labels = s.labels;
-    chartICT.data.datasets = [
-      {label:'close',data:s.closes,borderColor:'#6ee7b7',tension:0.12,pointRadius:0}
-    ];
+let charts = {};
+let chartConfigs = {};
+let scaleState = {1:1,2:1,3:1,4:1};
+let autoUpdate = false;
+let autoTimer = null;
+
+function createChart(ctxId, label, color, data) {
+  const ctx = document.getElementById(ctxId).getContext('2d');
+  const cfg = {
+    type: 'line',
+    data: {
+      datasets: [{
+        label, data,
+        borderWidth:2, pointRadius:0, tension:0.25,
+        borderColor: color, backgroundColor: 'rgba(0,0,0,0)'
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales: {
+        x: {type:'time', time:{unit:'minute', tooltipFormat:'HH:mm'}, ticks:{color:'#9fbdb3'}},
+        y: {ticks:{color:'#9fbdb3'}}
+      },
+      plugins: {
+        legend:{display:false},
+        tooltip:{mode:'index', intersect:false},
+        zoom:{
+          pan:{enabled:true, mode:'xy', modifierKey:'ctrl'},
+          zoom:{wheel:{enabled:true}, pinch:{enabled:true}, mode:'y'}
+        },
+        annotation:{
+          annotations:{}
+        }
+      }
+    }
+  };
+  const c = new Chart(ctx, cfg);
+  return c;
+}
+
+// init
+function initAll(){
+  const d1 = generateSeries(90, 150);
+  const d2 = generateSeries(90, 140);
+  const d3 = generateSeries(90, 135);
+  const d4 = generateSeries(90, 155);
+
+  charts[1] = createChart('chart1','ICT', '#59f3d6', d1);
+  charts[2] = createChart('chart2','GANN', '#ffd47a', d2);
+  charts[3] = createChart('chart3','MATH', '#a0c7ff', d3);
+  charts[4] = createChart('chart4','TV-like', '#9aec7a', d4);
+
+  updateStatsAll();
+}
+
+// Show / hide panels
+function togglePanel(n){
+  const el = document.getElementById('panel'+n);
+  if(!el) return;
+  const hidden = el.classList.toggle('hidden');
+  // Update button label
+  const btn = el.querySelector('.controls .btn');
+  if(btn) btn.textContent = hidden ? 'Show' : 'Hide';
+}
+
+// Toggle all
+function toggleAll(show){
+  for(let i=1;i<=4;i++){
+    const el = document.getElementById('panel'+i);
+    if(el) {
+      if(show) el.classList.remove('hidden'); else el.classList.add('hidden');
+      const b = el.querySelector('.controls .btn');
+      if(b) b.textContent = show ? 'Hide' : 'Show';
+    }
+  }
+}
+
+// Zoom reset
+function zoomReset(n){
+  const c = charts[n];
+  if(!c) return;
+  c.resetZoom();
+}
+
+// Add simple single line annotation (start & end)
+function addLineAnnotation(n){
+  const c = charts[n];
+  if(!c) return;
+  const ds = c.data.datasets[0];
+  const first = ds.data[0];
+  const last = ds.data[ds.data.length-1];
+  const name = 'line_' + Date.now();
+  const ann = {
+    type:'line',
+    xMin: first.x,
+    xMax: last.x,
+    yMin: first.y,
+    yMax: last.y,
+    borderColor: '#fff',
+    borderWidth:1.5,
+    label:{content:'draw', enabled:false}
+  };
+  c.options.plugins.annotation.annotations[name] = ann;
+  c.update();
+}
+
+// toggle scale multiplier (1x/2x)
+function toggleScale(n){
+  scaleState[n] = scaleState[n] === 1 ? 2 : 1;
+  const c = charts[n];
+  if(!c) return;
+  const ds = c.data.datasets[0].data.map(p => p.y);
+  const max = Math.max(...ds);
+  const min = Math.min(...ds);
+  const center = (max+min)/2;
+  const range = (max-min)/2 * scaleState[n];
+  c.options.scales.y.min = Math.max(0, center - range);
+  c.options.scales.y.max = center + range;
+  c.update();
+  updateStats(n);
+}
+
+// compute & show min/max/close for each chart
+function updateStats(n){
+  const c = charts[n];
+  if(!c) return;
+  const ds = c.data.datasets[0].data;
+  if(!ds || ds.length===0) return;
+  const values = ds.map(x=>x.y);
+  const min = Math.min(...values).toFixed(2);
+  const max = Math.max(...values).toFixed(2);
+  const close = values[values.length-1].toFixed(2);
+  document.getElementById('min'+n).textContent = min;
+  document.getElementById('max'+n).textContent = max;
+  document.getElementById('close'+n).textContent = close;
+}
+function updateStatsAll(){
+  for(let i=1;i<=4;i++) updateStats(i);
+}
+
+// Refresh data (demo)
+function refreshAll(){
+  for(let i=1;i<=4;i++){
+    const ds = generateSeries(90, 120 + 10*i);
+    charts[i].data.datasets[0].data = ds;
+    // reset y scale
+    charts[i].options.scales.y.min = undefined;
+    charts[i].options.scales.y.max = undefined;
+    charts[i].update();
+  }
+  updateStatsAll();
+}
+
+// auto update toggler
+function autoToggle(){
+  autoUpdate = !autoUpdate;
+  if(autoUpdate){
+    autoTimer = setInterval(()=> {
+      // append one new point to each
+      for(let i=1;i<=4;i++){
+        const ds = charts[i].data.datasets[0].data;
+        const last = ds[ds.length-1];
+        const newT = new Date(last.x.getTime() + 60*1000);
+        const newY = Number((last.y * (1 + (Math.random()-0.48)*0.0025)).toFixed(2));
+        ds.push({x:newT,y:newY});
+        if(ds.length>120) ds.shift();
+        charts[i].update('none');
+      }
+      updateStatsAll();
+    }, 5000);
   } else {
-    chartICT.data.labels = s.labels;
-    chartICT.data.datasets[0].data = s.closes;
-  }
-  chartICT.update();
-
-  // show max/min/close
-  document.getElementById('ict-max').textContent = Math.max(...s.closes).toFixed(2);
-  document.getElementById('ict-min').textContent = Math.min(...s.closes).toFixed(2);
-  document.getElementById('ict-close').textContent = s.closes[s.closes.length-1].toFixed(2);
-}
-
-function updateGann(candles){
-  const s = candlesToSeries(candles);
-  // Show closes wrapped 0-360 degrees (demo)
-  const deg = s.closes.map(v=>v % 360);
-  if(chartGann.data.datasets.length===0){
-    chartGann.data.labels = s.labels;
-    chartGann.data.datasets = [{label:'degreeMapping',data:deg,borderColor:'#ffd166',tension:0.12,pointRadius:0}];
-  } else {
-    chartGann.data.labels = s.labels;
-    chartGann.data.datasets[0].data = deg;
-  }
-  chartGann.update();
-}
-
-function sma(series, length=10){
-  const out = [];
-  for(let i=0;i<series.length;i++){
-    const start = Math.max(0,i-length+1);
-    const slice = series.slice(start,i+1);
-    const avg = slice.reduce((a,b)=>a+b,0)/slice.length;
-    out.push(+avg.toFixed(4));
-  }
-  return out;
-}
-
-function updateMath(candles){
-  const s = candlesToSeries(candles);
-  const closes = s.closes;
-  const length = Number(document.getElementById('sma-length').value) || 10;
-  const smaSeries = sma(closes,length);
-
-  if(chartMath.data.datasets.length===0){
-    chartMath.data.labels = s.labels;
-    chartMath.data.datasets = [
-      {label:'close',data:closes,borderColor:'#93c5fd',tension:0.12,pointRadius:0},
-      {label:'SMA',data:smaSeries,borderColor:'#fb7185',tension:0.12,pointRadius:0}
-    ];
-  } else {
-    chartMath.data.labels = s.labels;
-    chartMath.data.datasets[0].data = closes;
-    chartMath.data.datasets[1].data = smaSeries;
-  }
-  chartMath.update();
-  document.getElementById('math-max').textContent = Math.max(...closes).toFixed(2);
-  document.getElementById('math-min').textContent = Math.min(...closes).toFixed(2);
-  document.getElementById('math-close').textContent = closes[closes.length-1].toFixed(2);
-}
-
-function updateTrade(candles){
-  const s = candlesToSeries(candles);
-  // add a simple 20-period SMA as indicator
-  const sma20 = sma(s.closes,20);
-
-  if(chartTrade.data.datasets.length===0){
-    chartTrade.data.labels = s.labels;
-    chartTrade.data.datasets = [
-      {label:'close',data:s.closes,borderColor:'#a78bfa',tension:0.12,pointRadius:0},
-      {label:'SMA20',data:sma20,borderColor:'#34d399',tension:0.12,pointRadius:0}
-    ];
-  } else {
-    chartTrade.data.labels = s.labels;
-    chartTrade.data.datasets[0].data = s.closes;
-    chartTrade.data.datasets[1].data = sma20;
-  }
-  chartTrade.update();
-}
-
-/* ---------- Demo backend calls ---------- */
-
-const BASE = window.location.origin; // backend serves frontend
-
-async function callIctDetect(candles){
-  try{
-    log('Calling /ict/detect (demo)');
-    const payload = {symbol:'DEMO', candles: candles.map(c=>[c.t,c.open,c.high,c.low,c.close])};
-    const res = await fetch(BASE + '/ict/detect', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-    if(!res.ok) throw new Error('ICT detect failed');
-    const json = await res.json();
-    document.getElementById('ict-detect-result').textContent = 'Detected: ' + (json.detected_models?.map(m=>m.name+'('+Math.round(m.confidence*100)+'%)').join(', ') || 'none');
-    log('ICT detect success');
-  }catch(err){
-    log('ICT detect error: ' + err.message);
-    document.getElementById('ict-detect-result').textContent = 'Detect failed';
+    clearInterval(autoTimer);
   }
 }
 
-async function callPredict(symbol='DEMO'){
-  try{
-    const payload = {symbol, timeframe:'1h'};
-    log('Calling /predict (demo)');
-    const res = await fetch(BASE + '/predict', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-    const j = await res.json();
-    document.getElementById('predict-out').textContent = `${j.prediction.direction} @ ${j.prediction.target_price} (conf ${Math.round(j.prediction.confidence*100)}%)`;
-    log('Predict success');
-  } catch(e){
-    log('Predict error: ' + e.message);
-  }
+// export selected chart image
+function exportChart(){
+  const idx = Number(document.getElementById('chartSelect').value);
+  const c = charts[idx];
+  if(!c) return alert('chart not found');
+  const url = c.toBase64Image();
+  // open image
+  const w = window.open('');
+  w.document.write('<img src="'+url+'" style="max-width:100%"/>');
 }
 
-async function callGannPriceToDegree(price){
-  try{
-    const u = `${BASE}/gann/convert?type=price_to_degree&value=${encodeURIComponent(price)}`;
-    log('Calling /gann/convert ? price=' + price);
-    const r = await fetch(u);
-    const j = await r.json();
-    document.getElementById('gann-output').textContent = 'degree: ' + (j.degree ?? 'N/A');
-    log('Gann convert success');
-  } catch(e){
-    log('Gann convert error: ' + e.message);
-  }
+// conversion helpers (replace with real Gann formulas later)
+function priceToDegree(){
+  const p = Number(document.getElementById('priceInput').value || 0);
+  const deg = (p % 360).toFixed(2);
+  document.getElementById('convResult').textContent = `Degree: ${deg}° (demo)`;
 }
-
-/* ---------- Wiring UI ---------- */
-
-function wireUI(){
-  document.getElementById('btn-ict-refresh').addEventListener('click', ()=> {
-    const candles = randomCandleSet(120,110);
-    updateICT(candles);
-    updateGann(candles);
-  });
-  document.getElementById('btn-ict-detect').addEventListener('click', async ()=> {
-    const candles = randomCandleSet(120,110);
-    await callIctDetect(candles);
-  });
-  document.getElementById('ict-scale').addEventListener('change',(e)=>{
-    const v = Number(e.target.value);
-    document.getElementById('chart-ict').style.height = (260 * v) + 'px';
-    chartICT.resize();
-  });
-
-  document.getElementById('btn-gann-convert').addEventListener('click', ()=>{
-    const p = Number(document.getElementById('gann-price').value || 0);
-    callGannPriceToDegree(p);
-  });
-  document.getElementById('btn-gann-refresh').addEventListener('click', ()=>{
-    const candles = randomCandleSet(120,200);
-    updateGann(candles);
-  });
-
-  document.getElementById('btn-math-refresh').addEventListener('click', ()=>{
-    updateMath(randomCandleSet(200,120));
-  });
-
-  document.getElementById('btn-trade-refresh').addEventListener('click', ()=>{
-    updateTrade(randomCandleSet(200,135));
-  });
-
-  document.getElementById('btn-predict').addEventListener('click', ()=>{
-    const symbol = document.getElementById('trade-symbol').value || 'DEMO';
-    callPredict(symbol);
-  });
+function degreeToPrice(){
+  const d = Number(document.getElementById('degreeInput').value || 0);
+  const price = (100 + (d*0.5)).toFixed(2);
+  document.getElementById('convResult').textContent = `Price ~ ${price} (demo)`;
 }
+function timeToPrice(){
+  const now = new Date();
+  const price = (120 + now.getHours() + now.getMinutes()/60).toFixed(2);
+  document.getElementById('convResult').textContent = `Time→Price ${price} (demo)`;
+}
+function priceToTime(){
+  const p = Number(document.getElementById('priceInput').value || 0);
+  const hours = Math.floor((p % 24));
+  document.getElementById('convResult').textContent = `Hour ~ ${hours}:00 (demo)`;
+}
+function degreeToTime(){ /* implement when needed */ }
 
-/* ---------- Init ---------- */
-createCharts();
-wireUI();
+// initial run
+initAll();
 
-// populate with initial data
-const baseCandles = randomCandleSet(160,120);
-updateICT(baseCandles);
-updateGann(baseCandles);
-updateMath(baseCandles);
-updateTrade(baseCandles);
+/* ========= Placeholders for wiring real backend ===========
+Examples (uncomment and replace URL):
+fetch('/api/candles?symbol=XXX').then(r=>r.json()).then(data=>{
+  charts[1].data.datasets[0].data = data.map(d=>({x:new Date(d.t), y:d.close}));
+  charts[1].update();
+});
 
-log('Frontend demo loaded — ready.');
+For ICT detection:
+fetch('/api/ict/detect',{method:'POST', body:JSON.stringify({candles})})
+  .then(...)
+
+Gann conversions:
+fetch('/api/gann/convert',...)
+=========================================================== */
+
 </script>
 </body>
 </html>
