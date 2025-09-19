@@ -11,6 +11,25 @@ services:
     startCommand: |
       cd backend
       uvicorn server:app --host 0.0.0.0 --port $PORT --workers 2 --loop uvloop
+    envVars:
+      - key: AQ_DB_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: ALERT_EMAILS
+        sync: false
 
   - type: static_site
     name: astro-quant-live-frontend
