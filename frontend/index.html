@@ -1,129 +1,103 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <title>AstroQuant — Live 4 Charts (ICT / Gann / Math / Momentum)</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    html,body{height:100%;margin:0;background:#041521;color:#dfeffb;font-family:Inter,Arial}
-    .container{display:flex;flex-direction:column;height:100vh;padding:12px;box-sizing:border-box}
-    .grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:12px;flex:1}
-    .chart-card{background:#061c29;padding:10px;border-radius:8px;display:flex;flex-direction:column}
-    .chart-title{font-size:14px;margin-bottom:6px;color:#bfeefc;display:flex;justify-content:space-between}
-    .chart-canvas-wrap{flex:1;min-height:260px}
-    .controls button{background:#0f3750;border:1px solid #1f6b8f;color:#eaf6ff;padding:4px 6px;border-radius:6px;cursor:pointer;margin:2px}
-    .panel{position:absolute;top:10px;right:10px;background:#04232b;padding:10px;border-radius:8px;display:none;color:#dff6ff;z-index:50;max-width:300px}
-    .signal.good{color:#77f7a9} .signal.bad{color:#ff8787} .signal.info{color:#9ddfff}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>AstroQuant — Live Demo Dashboard (4 Charts)</h2>
-    <div class="grid">
-      <div class="chart-card"><div class="chart-title">Chart 1 — ICT Models <button onclick="togglePanel('ictPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart1"></canvas></div></div>
-      <div class="chart-card"><div class="chart-title">Chart 2 — Gann <button onclick="togglePanel('gannPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart2"></canvas></div></div>
-      <div class="chart-card"><div class="chart-title">Chart 3 — Math <button onclick="togglePanel('mathPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart3"></canvas></div></div>
-      <div class="chart-card"><div class="chart-title">Chart 4 — Momentum <button onclick="togglePanel('algoPanel')">Signals</button></div><div class="chart-canvas-wrap"><canvas id="chart4"></canvas></div></div>
-    </div>
-  </div>
+# backend/server.py
+# Simple FastAPI backend for AstroQuant demo:
+# - /candles   -> returns last N historical candles (JSON)
+# - /health    -> health check
+# - websocket  -> ws feed that pushes new ticks (simulated if no live exchange)
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
+import asyncio, uvicorn, os, time, random, json
+from typing import List, Dict
 
-  <!-- Panels -->
-  <div id="ictPanel" class="panel"><h4>ICT Signals</h4><div id="ictSignals"></div></div>
-  <div id="gannPanel" class="panel"><h4>Gann Signals</h4><div id="gannSignals"></div></div>
-  <div id="mathPanel" class="panel"><h4>Math Signals</h4><div id="mathSignals"></div></div>
-  <div id="algoPanel" class="panel"><h4>Momentum/Algo Signals</h4><div id="algoSignals"></div></div>
+app = FastAPI()
 
-<script>
-/* ====== Chart Setup ====== */
-function makeChart(ctx,label,color){
-  return new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label,data:[],borderColor:color,borderWidth:2,pointRadius:0,tension:0.2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#9ddfff'}},y:{ticks:{color:'#9ddfff'}}},plugins:{legend:{display:false}}}});
-}
-const charts={
-  1:makeChart(document.getElementById('chart1'),'ICT','#66e0ff'),
-  2:makeChart(document.getElementById('chart2'),'Gann','#ffd07a'),
-  3:makeChart(document.getElementById('chart3'),'Math','#a8ff82'),
-  4:makeChart(document.getElementById('chart4'),'Momentum','#ff8a8a')
-};
-let buffers={1:[],2:[],3:[],4:[]};
+# Simple in-memory candle store (minute candles)
+CANDLES: List[Dict] = []
 
-/* ====== Fetch Live Data (AlphaVantage) ====== */
-const API_KEY=(window.ALPHAVANTAGE_API_KEY)||"demo"; // replace via env
-const SYMBOL=(window.SYMBOL)||"MSFT"; // "XAUUSD" with real key
+# Seed with synthetic or basic historical values on startup
+def seed_data():
+    global CANDLES
+    # If you have real CSV or DB you can load here. For now build synthetic walk.
+    now = int(time.time())
+    # create 120 minute candles
+    base = 500.0
+    CANDLES = []
+    for i in range(120):
+        t = now - (119 - i) * 60
+        # random walk
+        base += (random.random() - 0.45) * 1.2
+        o = round(base + (random.random() - 0.5) * 0.3, 3)
+        c = round(base + (random.random() - 0.5) * 0.3, 3)
+        h = max(o, c) + round(random.random() * 0.3, 3)
+        l = min(o, c) - round(random.random() * 0.3, 3)
+        CANDLES.append({"t": t, "open": o, "high": h, "low": l, "close": c})
+seed_data()
 
-async function fetchLive(){
-  const url=`https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=1min&apikey=${API_KEY}`;
-  const r=await fetch(url); const j=await r.json();
-  const series=j["Time Series (1min)"];
-  if(!series){console.log("API limit or bad key");return;}
-  const data=Object.entries(series).map(([t,v])=>({t,close:+v["4. close"]})).reverse().slice(-80);
-  updateCharts(data);
-}
+@app.get("/health")
+async def health():
+    return JSONResponse({"status":"ok"})
 
-/* ====== Update Charts & Run Models ====== */
-function updateCharts(data){
-  data.forEach(d=>{
-    for(const id in charts){
-      buffers[id].push(d.close);
-      if(buffers[id].length>80)buffers[id].shift();
-      const c=charts[id];c.data.labels.push(d.t);c.data.datasets[0].data.push(d.close);
-      if(c.data.labels.length>80){c.data.labels.shift();c.data.datasets[0].data.shift();}
-      c.update();
-    }
-    runDetectors(d);
-  });
-}
+@app.get("/candles")
+async def candles(limit: int = 80):
+    # return last `limit` candles as JSON, timestamps ISO
+    out = CANDLES[-limit:]
+    return JSONResponse([{"t": c["t"], "close": c["close"], "open": c["open"], "high": c["high"], "low": c["low"]} for c in out])
 
-/* ====== Model Detectors ====== */
-// ICT: Order blocks + Turtle Soup
-function detectICT(arr){
-  const sigs=[]; if(arr.length<10) return sigs;
-  const last=arr[arr.length-1]; const prev=arr[arr.length-2];
-  if(last>prev*1.01) sigs.push({type:"Bullish OB",price:last.toFixed(2)});
-  if(last<prev*0.99) sigs.push({type:"Bearish OB",price:last.toFixed(2)});
-  // Turtle Soup: false breakout
-  const max=Math.max(...arr.slice(-6)), min=Math.min(...arr.slice(-6));
-  if(last>=max) sigs.push({type:"TurtleSoup Short",price:last.toFixed(2)});
-  if(last<=min) sigs.push({type:"TurtleSoup Long",price:last.toFixed(2)});
-  return sigs;
-}
-function detectGann(last){return[{type:"Price→Degree",val:(last%360).toFixed(2)}];}
-function detectMath(arr){
-  const sigs=[]; if(arr.length<21) return sigs;
-  const sma=(n)=>arr.slice(-n).reduce((a,b)=>a+b,0)/n;
-  const s7=sma(7), s21=sma(21), last=arr[arr.length-1];
-  if(s7>s21) sigs.push({type:"SMA Bull",price:last.toFixed(2)});
-  else sigs.push({type:"SMA Bear",price:last.toFixed(2)});
-  return sigs;
-}
-function detectAlgo(arr){
-  const sigs=[]; if(arr.length<14) return sigs;
-  const gains=arr.slice(-14).map((v,i,a)=>i?Math.max(0,v-a[i-1]):0);
-  const loss=arr.slice(-14).map((v,i,a)=>i?Math.max(0,a[i-1]-v):0);
-  const rs=(gains.reduce((a,b)=>a+b,0))/(loss.reduce((a,b)=>a+b,0)+1e-6);
-  const rsi=100-(100/(1+rs));
-  if(rsi>70) sigs.push({type:"RSI Overbought",val:rsi.toFixed(1)});
-  if(rsi<30) sigs.push({type:"RSI Oversold",val:rsi.toFixed(1)});
-  return sigs;
-}
-function runDetectors(d){
-  render("ictSignals",detectICT(buffers[1]));
-  render("gannSignals",detectGann(d.close));
-  render("mathSignals",detectMath(buffers[3]));
-  render("algoSignals",detectAlgo(buffers[4]));
-}
-function render(el,arr){
-  document.getElementById(el).innerHTML=arr.map(s=>`<div class="signal ${s.type.includes("Bull")||s.type.includes("Oversold")?"good":"bad"}">${s.type} ${s.price||s.val||""}</div>`).join("")||"<div>No signals</div>";
-}
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active: List[WebSocket] = []
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+    async def broadcast(self, message: str):
+        for conn in list(self.active):
+            try:
+                await conn.send_text(message)
+            except:
+                self.disconnect(conn)
 
-/* ====== Panels ====== */
-function togglePanel(id){
-  document.querySelectorAll('.panel').forEach(p=>{if(p.id!==id)p.style.display="none"});
-  const el=document.getElementById(id); el.style.display=(el.style.display==="block"?"none":"block");
-}
+manager = ConnectionManager()
 
-/* ====== Init ====== */
-fetchLive(); setInterval(fetchLive,60000); // refresh each min
-</script>
-</body>
-</html>
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # keep connection alive; we don't expect client messages here
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+# Background task: simulate incoming tick each 5s and update last candle (or rotate new candle each minute)
+async def tick_generator_loop():
+    global CANDLES
+    while True:
+        # simulate small tick change
+        last = CANDLES[-1]
+        new_close = round(last["close"] + (random.random() - 0.5) * 0.6, 3)
+        now = int(time.time())
+        # update last candle's close/high/low
+        last["close"] = new_close
+        if new_close > last["high"]:
+            last["high"] = new_close
+        if new_close < last["low"]:
+            last["low"] = new_close
+        last["t"] = now  # update timestamp to latest tick time
+        # Broadcast minimal payload (timestamp, close)
+        payload = {"t": now, "close": new_close}
+        await manager.broadcast(json.dumps(payload))
+        # every 60s, push a new candle (rotate)
+        await asyncio.sleep(5)
+
+# Run background tick generator on startup
+@app.on_event("startup")
+async def startup_event():
+    loop = asyncio.get_event_loop()
+    loop.create_task(tick_generator_loop())
+
+# If running standalone
+if __name__ == "__main__":
+    uvicorn.run("backend.server:app", host="0.0.0.0", port=int(os.environ.get("PORT", "10000")), reload=False)
