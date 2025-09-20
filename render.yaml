@@ -1,36 +1,63 @@
+# render.yaml - Render blueprint for AstraQuant (backend + frontend)
+# Put this file at the repository root and commit to main.
+# After connecting the repo to Render, choose "Use blueprint" to create services automatically.
+
 services:
   - type: web
-    name: astro-quant-live-backend
+    name: astraquant-backend
     env: python
-    plan: free
-    repo: SRAVANTAMARANA/astro-quant-live
+    plan: starter            # change plan as needed
+    repo: https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
     branch: main
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r backend/requirements.txt
-    startCommand: |
-      uvicorn backend.server:app --host 0.0.0.0 --port $PORT --workers 1
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_ID
-        sync: false
-      - key: ALPHAVANTAGE_API_KEY
-        sync: false
+      - key: TZ
+        value: "Asia/Kolkata"
+    secrets:
+      - key: GITHUB_TOKEN          # optional: only if used by builds; add value in Render dashboard
+      - key: TELEGRAM_BOT_TOKEN   # create this secret in Render dashboard (do NOT store token in repo)
       - key: FINNHUB_API_KEY
-        sync: false
-      - key: TWELVEDATA_API_KEY
-        sync: false
+      - key: ALPHAVANTAGE_API_KEY
+      - key: RENDER_API_KEY        # if you want backend to talk back to Render APIs (optional)
+    disk:
+      size_gb: 1
 
-  - type: static
-    name: astro-quant-live-frontend
+  - type: static_site
+    name: astraquant-frontend
     env: static
-    plan: free
-    repo: SRAVANTAMARANA/astro-quant-live
+    plan: starter
+    repo: https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
     branch: main
-    buildCommand: |
-      cd frontend || true
-      if [ -f yarn.lock ]; then yarn install; else npm install; fi
-      npm run build || yarn build || true
-    publishDirectory: frontend/build
+    rootDir: frontend
+    buildCommand: ""          # single static HTML file; leave empty
+    publishDir: "."           # publish the frontend folder root
+    autoDeploy: true
     envVars: []
+    secrets: []
+
+# Optionally create a cron job for retrain/orchestrator tasks
+jobs:
+  - name: astraquant-orchestrator
+    type: job
+    env: python
+    plan: dev
+    repo: https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python orchestrator.py   # ensure orchestrator.py exists and is idempotent
+    schedule: "0 2 * * *"                  # daily at 02:00 (UTC) - change as needed
+    timeout: 3600
+    envVars: []
+    secrets:
+      - key: MODEL_REGISTRY_KEY
+
+# Optional: friendly metadata
+metadata:
+  project: AstraQuant
+  owner: YOUR_NAME_OR_TEAM
+  contact: sravan.tamarana@gmail.com
