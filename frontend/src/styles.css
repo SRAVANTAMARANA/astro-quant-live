@@ -1,2 +1,2 @@
-body { margin: 0; font-family: Inter, system-ui, Arial; background:#071019; color:#cfeeea; }
-h1 { color: #5fd3c9; }
+body { font-family: Inter, system-ui, Arial, sans-serif; margin:0; padding:0; background:#fff; color:#222 }
+#root { padding: 12px; }
