@@ -1,114 +1,72 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>ICT Panel - AstraQuant</title>
+  <title>ICT Chart Panel</title>
+  <meta charset="utf-8"/>
   <style>
-    body { font-family: Inter, Arial; margin: 12px; }
-    #chart { max-width: 1200px; height: 520px; }
-    .candidate { border:1px solid #eee; padding:8px; margin:8px 0; border-radius:6px; }
-    button { padding:6px 10px; }
+    body { font-family: Arial; margin: 20px; }
+    #chart { height: 500px; }
+    .panel { margin-top: 20px; }
+    button { margin: 5px; padding: 10px; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.0/dist/chartjs-chart-financial.min.js"></script>
 </head>
 <body>
-  <h2>ICT Order-Block Panel — AstraQuant</h2>
-  <p><button id="btnLoad">Load sample bars & detect</button></p>
-  <canvas id="chart"></canvas>
-  <div id="candList"></div>
+  <h1>AstroQuant ICT Chart Panel</h1>
+  
+  <!-- TradingView Widget -->
+  <div id="chart"></div>
+  <script src="https://s3.tradingview.com/tv.js"></script>
+  <script>
+    new TradingView.widget({
+      "container_id": "chart",
+      "symbol": "OANDA:XAUUSD",
+      "interval": "5",
+      "timezone": "Etc/UTC",
+      "theme": "light",
+      "style": "1",
+      "locale": "en",
+      "enable_publishing": false,
+      "hide_top_toolbar": false,
+      "hide_legend": false,
+      "save_image": false
+    });
+  </script>
 
-<script>
-const BACKEND_BASE = (location.origin.replace(location.pathname,'')) + "/api";
+  <!-- ICT Controls -->
+  <div class="panel">
+    <h3>ICT Tools</h3>
+    <button onclick="checkFVG()">Detect FVG</button>
+    <button onclick="checkTurtleSoup()">Detect Turtle Soup</button>
+  </div>
 
-document.getElementById('btnLoad').addEventListener('click', async ()=>{
-  const sample = generateSampleBars();
-  const payload = { symbol: "XAUUSD", tf: "2m", bars: sample };
-  const res = await fetch(BACKEND_BASE + '/detect/ob', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(payload)
-  });
-  const j = await res.json();
-  renderChart(sample, j.candidates || []);
-  renderCandidates(j.candidates || []);
-});
+  <pre id="output"></pre>
 
-function generateSampleBars(){
-  const arr=[];
-  const start = Date.now() - 1000*60*150;
-  let price = 3400;
-  for(let i=0;i<90;i++){
-    const ts = new Date(start + i*2*60*1000).toISOString();
-    const o = price;
-    const c = +(o + (Math.random()-0.4)*8).toFixed(2);
-    const h = Math.max(o,c) + +(Math.random()*4).toFixed(2);
-    const l = Math.min(o,c) - +(Math.random()*4).toFixed(2);
-    const vol = Math.round(100 + Math.random()*500);
-    arr.push({ts, open:+o, high:+h, low:+l, close:+c, volume:vol});
-    price = c;
-  }
-  return arr;
-}
+  <script>
+    async function checkFVG() {
+      const res = await fetch("/ict/fvg", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({candles: sampleData})
+      });
+      document.getElementById("output").textContent = JSON.stringify(await res.json(), null, 2);
+    }
 
-let chart;
-function renderChart(bars, candidates){
-  const ctx = document.getElementById('chart').getContext('2d');
-  const data = bars.map(b => ({ t: new Date(b.ts), o: b.open, h: b.high, l: b.low, c: b.close }));
+    async function checkTurtleSoup() {
+      const res = await fetch("/ict/turtle_soup", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({candles: sampleData})
+      });
+      document.getElementById("output").textContent = JSON.stringify(await res.json(), null, 2);
+    }
 
-  if(chart) chart.destroy();
-
-  chart = new Chart(ctx, {
-    type: 'candlestick',
-    data: { datasets: [{ label: 'XAUUSD', data }]},
-    options: {
-      plugins: { legend: { display: false }},
-      scales: { x: { type:'time', time:{ tooltipFormat:'dd MMM HH:mm' } } },
-      responsive: true,
-      maintainAspectRatio: false,
-    },
-    plugins: [{
-      id: 'zoneOverlay',
-      afterDraw: (chartInstance)=>{
-        const ctx = chartInstance.ctx;
-        ctx.save();
-        const left = chartInstance.chartArea.left;
-        const right = chartInstance.chartArea.right;
-        (candidates || []).forEach((cand, idx)=>{
-          if(!cand.zone) return;
-          const zoneLow = cand.zone[0];
-          const zoneHigh = cand.zone[1];
-          const y1 = chartInstance.scales['y'].getPixelForValue(zoneLow);
-          const y2 = chartInstance.scales['y'].getPixelForValue(zoneHigh);
-          ctx.globalAlpha = 0.12;
-          ctx.fillStyle = idx % 2 === 0 ? '#0b6' : '#b00';
-          ctx.fillRect(left, y2, right-left, y1 - y2);
-          ctx.globalAlpha = 1;
-          ctx.strokeStyle = '#222';
-          ctx.beginPath();
-          ctx.moveTo(left, chartInstance.scales['y'].getPixelForValue(cand.entry_price));
-          ctx.lineTo(right, chartInstance.scales['y'].getPixelForValue(cand.entry_price));
-          ctx.stroke();
-        });
-        ctx.restore();
-      }
-    }]
-  });
-}
-
-function renderCandidates(candidates){
-  const div = document.getElementById('candList');
-  div.innerHTML = '';
-  if(!candidates || candidates.length===0){ div.innerHTML = '<p>No candidates</p>'; return; }
-  candidates.forEach(c => {
-    const el = document.createElement('div');
-    el.className = 'candidate';
-    el.innerHTML = `<b>${c.pattern}</b> ${c.symbol} ${c.tf} <br>
-      zone: ${c.zone ? c.zone.join(' - ') : '-'} <br>
-      entry: ${c.entry_price} stop: ${c.stop_price} conf: ${c.confidence}`;
-    div.appendChild(el);
-  });
-}
-</script>
+    // --- Sample Candles for Testing ---
+    const sampleData = [
+      {"time":"2025-09-19T09:30","open":3400,"high":3410,"low":3395,"close":3405},
+      {"time":"2025-09-19T09:35","open":3405,"high":3415,"low":3400,"close":3410},
+      {"time":"2025-09-19T09:40","open":3410,"high":3420,"low":3408,"close":3415},
+      {"time":"2025-09-19T09:45","open":3415,"high":3425,"low":3405,"close":3410}
+    ];
+  </script>
 </body>
 </html>
