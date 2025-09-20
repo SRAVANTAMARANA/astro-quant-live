@@ -1,9 +1,8 @@
-# backend/server.py
 import os
 import logging
 from fastapi import FastAPI, HTTPException
-import requests
 from pydantic import BaseModel
+import requests
 
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI(title="AstroQuant Backend")
@@ -21,14 +20,14 @@ def send_telegram_message(text: str, parse_mode: str = "HTML"):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
-        "parse_mode": parse_mode,
+        "parse_mode": parse_mode
     }
     resp = requests.post(url, json=payload, timeout=15)
     try:
         data = resp.json()
     except ValueError:
         raise RuntimeError(f"Telegram returned non-json: {resp.text}")
-    if not resp.ok or not data.get("ok"):
+    if not resp.ok or not data.get("ok", False):
         raise RuntimeError(f"Telegram API error: {data}")
     return data
 
@@ -42,23 +41,8 @@ async def health():
 @app.post("/notify")
 async def notify(req: NotifyRequest):
     try:
-        result = send_telegram_message(req.text)
+        data = send_telegram_message(req.text)
     except Exception as e:
-        logger.exception("Failed to send telegram message")
+        logger.exception("telegram send failed")
         raise HTTPException(status_code=500, detail=str(e))
-    return {"status": "sent", "result": result}
-
-# quick test endpoint to trigger a simple sample message (safe for testing)
-@app.post("/alerts/test")
-async def alerts_test():
-    try:
-        data = send_telegram_message("AstroQuant test alert ✅")
-    except Exception as e:
-        logger.exception("alerts/test failed")
-        raise HTTPException(status_code=500, detail=str(e))
-    return {"ok": True, "telegram": data}
-
-# local runner (useful for local testing)
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("backend.server:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), reload=True)
+    return {"result": data}
