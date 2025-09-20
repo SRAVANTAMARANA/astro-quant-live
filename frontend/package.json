@@ -2,35 +2,17 @@
   "name": "astro-quant-frontend",
   "version": "1.0.0",
   "private": true,
-  "engines": {
-    "node": "18.x"
-  },
+  "engines": { "node": "18.x" },
   "scripts": {
-    "start": "serve -s build",
-    "dev": "react-scripts start",
+    "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
-    "postinstall": "node -v && npm -v || true"
+    "eject": "react-scripts eject"
   },
   "dependencies": {
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-scripts": "5.0.1",
-    "axios": "^1.4.0",
-    "lightweight-charts": "^3.9.0",
-    "chart.js": "^4.4.0",
-    "serve": "^14.2.0"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "lightweight-charts": "^3.7.0"
   }
 }
