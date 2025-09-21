@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-pydantic
+python-dotenv
 requests
-apscheduler
-pytz
+pydantic
