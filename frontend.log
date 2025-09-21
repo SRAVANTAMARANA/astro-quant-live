@@ -1,0 +1,23 @@
+npm WARN exec The following package was not found and will be installed: serve
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: 'serve@14.2.5',
+npm WARN EBADENGINE   required: { node: '>= 14' },
+npm WARN EBADENGINE   current: { node: 'v12.22.9', npm: '8.5.1' }
+npm WARN EBADENGINE }
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: 'boxen@7.0.0',
+npm WARN EBADENGINE   required: { node: '>=14.16' },
+npm WARN EBADENGINE   current: { node: 'v12.22.9', npm: '8.5.1' }
+npm WARN EBADENGINE }
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: 'camelcase@7.0.1',
+npm WARN EBADENGINE   required: { node: '>=14.16' },
+npm WARN EBADENGINE   current: { node: 'v12.22.9', npm: '8.5.1' }
+npm WARN EBADENGINE }
+file:///home/sravansai/.npm/_npx/aab42732f01924e5/node_modules/serve/build/main.js:172
+      const ipAddress = request.socket.remoteAddress?.replace("::ffff:", "") ?? "unknown";
+                                                     ^
+
+SyntaxError: Unexpected token '.'
+    at Loader.moduleStrategy (internal/modules/esm/translators.js:133:18)
+    at async link (internal/modules/esm/module_job.js:42:21)

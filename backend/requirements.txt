@@ -1,3 +1,6 @@
-fastapi==0.95.2
-uvicorn==0.22.0
-pydantic==1.10.12
+fastapi
+uvicorn[standard]
+pydantic
+requests
+apscheduler
+pytz
