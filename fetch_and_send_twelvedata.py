@@ -1,67 +1,57 @@
-#!/usr/bin/env python3
-"""
-Fetch candles from TwelveData and send them into AstroQuant ICT backend.
-"""
-
+# backend/fetch_and_send_twelvedata.py
 import os
 import requests
-from datetime import datetime, timedelta
+import sys
 
-BACKEND_URL = "http://localhost:8000/ict/fvg"
+API_KEY = os.getenv("TWELVEDATA_API_KEY")
+if not API_KEY:
+    print("TWELVEDATA_API_KEY not found in env")
+    sys.exit(1)
 
-def epoch_ms(ts):
-    return int(ts * 1000)
+BASE_URL = "https://api.twelvedata.com/time_series"
 
-def fetch_twelvedata(symbol="XAU/USD", interval="5min", minutes=240):
-    key = os.environ.get("TWELVEDATA_API_KEY")
-    if not key:
-        raise RuntimeError("TWELVEDATA_API_KEY not set in environment")
-
-    end = datetime.utcnow()
-    start = end - timedelta(minutes=minutes)
-
-    url = "https://api.twelvedata.com/time_series"
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "outputsize": 5000,
-        "start_date": start.isoformat(),
-        "end_date": end.isoformat(),
-        "apikey": key
-    }
-
-    r = requests.get(url, params=params, timeout=20)
+def fetch_data(symbol="XAU/USD", interval="5min", outputsize=50):
+    url = f"{BASE_URL}?symbol={symbol}&interval={interval}&apikey={API_KEY}&outputsize={outputsize}"
+    r = requests.get(url, timeout=15)
     r.raise_for_status()
     data = r.json()
+    # TwelveData returns "values" list
+    return data.get("values", [])
 
-    if "values" not in data:
-        raise RuntimeError(f"TwelveData error: {data}")
-
-    # Reverse to chronological order
-    values = list(reversed(data["values"]))
-    candles = []
-    for v in values:
-        dt = datetime.fromisoformat(v["datetime"])
-        candles.append({
-            "time": epoch_ms(dt.timestamp()),
-            "open": float(v["open"]),
-            "high": float(v["high"]),
-            "low": float(v["low"]),
-            "close": float(v["close"]),
-            "volume": float(v.get("volume", 0)),
-        })
-    return candles
-
-def send_to_backend(symbol, candles):
-    payload = {"symbol": symbol, "candles": candles}
-    r = requests.post(BACKEND_URL, json=payload, timeout=30)
-    r.raise_for_status()
-    return r.json()
+def post_to_ict(formatted, symbol="XAUUSD", interval="5m"):
+    payload = {
+        "symbol": symbol,
+        "interval": interval,
+        "candles": formatted
+    }
+    # backend service runs on port 8000 and has /ict/fvg endpoint per repo
+    resp = requests.post("http://localhost:8000/ict/fvg", json=payload, timeout=15)
+    try:
+        print("ict response:", resp.status_code, resp.text)
+        return resp.json()
+    except Exception:
+        return {"status": resp.status_code, "text": resp.text}
 
 if __name__ == "__main__":
-    symbol = "XAU/USD"
-    interval = "5min"
-    candles = fetch_twelvedata(symbol, interval, minutes=240)
-    print(f"Fetched {len(candles)} candles from TwelveData.")
-    resp = send_to_backend(symbol, candles)
-    print("Backend response:", resp)
+    # optional args: symbol interval
+    symbol = sys.argv[1] if len(sys.argv) > 1 else "XAU/USD"
+    interval = sys.argv[2] if len(sys.argv) > 2 else "5min"
+    values = fetch_data(symbol=symbol, interval=interval, outputsize=100)
+    if not values:
+        print("No candle data returned:", values)
+        sys.exit(1)
+
+    # TwelveData returns newest first; reverse to chronological asc if needed
+    formatted = []
+    for c in reversed(values):
+        formatted.append({
+            "time": c.get("datetime", c.get("timestamp")), 
+            "open": float(c["open"]),
+            "high": float(c["high"]),
+            "low": float(c["low"]),
+            "close": float(c["close"])
+        })
+
+    print(f"Fetched {len(formatted)} candles. Posting to /ict/fvg ...")
+    out = post_to_ict(formatted, symbol=symbol.replace("/", ""), interval=interval)
+    print("Done:", out)
