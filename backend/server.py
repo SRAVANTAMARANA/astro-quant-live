@@ -1,218 +1,177 @@
-# backend/server.py
-# FastAPI backend - unified "signals" endpoint combining multiple APIs
-# Async, uses httpx
-import os
-from dotenv import load_dotenv
-# Load environment variables from .env
-load_dotenv()
-import asyncio
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+# server.py
+# Single-file FastAPI app that fetches candles from Finnhub when not provided and runs a placeholder FVG processing.
+# Requirements: fastapi, uvicorn, httpx, python-dotenv (optional to load .env in development)
+#
+# Install dependencies (if running locally):
+# pip install fastapi uvicorn httpx python-dotenv
 
+import os
+import time
+from typing import List, Optional, Any, Dict
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-# optional simple in-memory cache
-_CACHE: Dict[str, Dict[str, Any]] = {}
+# Optionally load local .env when running locally (not needed when running via docker-compose with env_file)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
-app = FastAPI(title="AstroQuant Backend (API aggregator)")
+app = FastAPI(title="AstroQuant Backend - ICT helper", version="0.1")
 
-# allow frontend origin (adjust origin(s) in production)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # for local dev; tighten for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Map common interval strings -> Finnhub resolution
+_RES_MAP = {
+    "1m": "1", "5m": "5", "15m": "15", "30m": "30", "60m": "60",
+    "1h": "60", "4h": "60", "1d": "D", "D": "D"
+}
 
-# read keys from environment (set in .env and docker-compose)
-TWELVE_KEY = os.getenv("TWELVEDATA_API_KEY", "")
-FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
-ALPHAV_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+class Candle(BaseModel):
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
 
-# Utilities: caching helper
-def cache_get(key: str, max_age_seconds=20):
-    rec = _CACHE.get(key)
-    if not rec:
-        return None
-    if (datetime.utcnow() - rec["ts"]).total_seconds() > max_age_seconds:
-        return None
-    return rec["value"]
-
-def cache_set(key: str, value: Any):
-    _CACHE[key] = {"value": value, "ts": datetime.utcnow()}
-
-
-# Pydantic response model (simple)
-class SignalResp(BaseModel):
-    symbol: str
-    price: Optional[float] = None
-    source_prices: Dict[str, Any] = {}
-    news: List[Dict[str, Any]] = []
-    meta: Dict[str, Any] = {}
-
-
-# Async fetch helpers using httpx
-async def fetch_twelvedata_quote(symbol: str) -> Dict[str, Any]:
-    # TwelveData example: https://twelvedata.com/docs
-    if not TWELVE_KEY:
-        return {"error": "no_twelvedata_key"}
-    url = "https://api.twelvedata.com/price"
-    params = {"symbol": symbol, "apikey": TWELVE_KEY}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params=params)
-        if resp.status_code != 200:
-            return {"error": f"td_status:{resp.status_code}", "text": resp.text[:200]}
-        data = resp.json()
-        return data
-
-
-async def fetch_finnhub_quote_and_news(symbol: str) -> Dict[str, Any]:
-    # Finnhub quote & company news
-    if not FINNHUB_KEY:
-        return {"error": "no_finnhub_key"}
-    base = "https://finnhub.io/api/v1"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        qurl = f"{base}/quote"
-        params = {"symbol": symbol, "token": FINNHUB_KEY}
-        qresp = await client.get(qurl, params=params)
-        # news (past 7 days)
-        today = datetime.utcnow().date()
-        frm = (today - timedelta(days=7)).isoformat()
-        to = today.isoformat()
-        nurl = f"{base}/company-news"
-        nresp = await client.get(nurl, params={"symbol": symbol, "from": frm, "to": to, "token": FINNHUB_KEY})
-        out = {
-            "quote": qresp.json() if qresp.status_code == 200 else {"error": qresp.text},
-            "news": nresp.json() if nresp.status_code == 200 else {"error": nresp.text},
-        }
-        return out
-
-
-async def fetch_alpha_vantage_quote(symbol: str) -> Dict[str, Any]:
-    if not ALPHAV_KEY:
-        return {"error": "no_alpha_v_key"}
-    url = "https://www.alphavantage.co/query"
-    params = {"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": ALPHAV_KEY}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params=params)
-        return resp.json()
-
-
-async def get_combined_symbol_data(symbol: str) -> SignalResp:
-    # caching by symbol
-    cache_key = f"symbol:{symbol}"
-    cached = cache_get(cache_key, max_age_seconds=20)
-    if cached:
-        return cached
-
-    # run API calls concurrently
-    results = await asyncio.gather(
-        fetch_twelvedata_quote(symbol),
-        fetch_finnhub_quote_and_news(symbol),
-        fetch_alpha_vantage_quote(symbol),
-    )
-
-    td, fh, av = results
-
-    # build a combined result
-    out = SignalResp(
-        symbol=symbol,
-        price=None,
-        source_prices={
-            "twelvedata": td,
-            "finnhub": fh.get("quote") if isinstance(fh, dict) else fh,
-            "alphavantage": av,
-        },
-        news=(fh.get("news") if isinstance(fh, dict) else []) or [],
-        meta={
-            "fetched_at": datetime.utcnow().isoformat(),
-        },
-    )
-
-    # try to set primary price from sources in order
-    try:
-        # twelvedata returns {"price": "1234.56"}
-        if isinstance(td, dict) and "price" in td:
-            out.price = float(td["price"])
-        elif isinstance(fh, dict) and "quote" in fh and isinstance(fh["quote"], dict) and "c" in fh["quote"]:
-            out.price = float(fh["quote"]["c"])
-        elif isinstance(av, dict) and "Global Quote" in av and "05. price" in av["Global Quote"]:
-            out.price = float(av["Global Quote"]["05. price"])
-    except Exception:
-        # ignore parsing errors
-        pass
-
-    cache_set(cache_key, out)
-    return out
-
-
-async def send_telegram_message(text: str) -> Dict[str, Any]:
-    # Basic Telegram notify helper - only if bot token and chat id exist
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return {"error": "no_telegram_config"}
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.post(url, json=payload)
-        return r.json()
-
-
-@app.get("/signals", response_model=List[SignalResp])
-async def signals(symbols: Optional[str] = "XAUUSD,EURUSD,USDJPY"):
-    """
-    /signals?symbols=XAUUSD,EURUSD
-    Returns a list of symbol data combined from multiple APIs.
-    """
-
-    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    tasks = [get_combined_symbol_data(s) for s in symbol_list]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    out = []
-    for r in results:
-        if isinstance(r, Exception):
-            out.append({"symbol": "ERROR", "meta": {"error": str(r)}})
-        else:
-            out.append(r)
-
-    # Example: if big move or special condition, send Telegram notification
-    # Simple rule: if XAUUSD moved > 0.5% (just example)
-    try:
-        for s in out:
-            if isinstance(s, SignalResp) and s.symbol.upper() == "XAUUSD" and s.price:
-                # compute relative change using Finnhub quote 'pc' previous close if available
-                fh_q = s.source_prices.get("finnhub", {})
-                prev_close = None
-                if isinstance(fh_q, dict):
-                    prev_close = fh_q.get("pc") or fh_q.get("p")  # fallback
-                if prev_close:
-                    try:
-                        prev_close = float(prev_close)
-                        curr = float(s.price)
-                        pct = abs(curr - prev_close) / prev_close * 100.0
-                        if pct > 0.5:
-                            await send_telegram_message(f"AstroQuant Alert: {s.symbol} moved {pct:.2f}% now {curr}")
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    # convert SignalResp objects to dicts for JSON response
-    final = []
-    for s in out:
-        if isinstance(s, SignalResp):
-            final.append(s.dict())
-        else:
-            final.append(s)
-    return final
-
+class FVGRequest(BaseModel):
+    symbol: Optional[str] = None
+    interval: Optional[str] = "5m"
+    limit: Optional[int] = 200
+    candles: Optional[List[Candle]] = None
+    # allow extra fields
+    class Config:
+        extra = "allow"
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "time": datetime.utcnow().isoformat()}
+    return {"status": "ok"}
+
+async def fetch_candles_finnhub(symbol: str, interval: str, limit: int = 200) -> List[Dict[str, Any]]:
+    """
+    Fetch OHLC candles from Finnhub.io
+    Returns list of dicts: {"time": ts, "open": o, "high": h, "low": l, "close": c}
+    """
+    key = os.getenv("FINNHUB_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("FINNHUB_API_KEY not set in environment")
+
+    resolution = _RES_MAP.get(interval)
+    if resolution is None:
+        # If e.g. "5m" not in map, try exact numeric fallback
+        if interval.endswith("m") and interval[:-1].isdigit():
+            resolution = interval[:-1]
+        else:
+            raise ValueError(f"Unsupported interval '{interval}'")
+
+    now = int(time.time())
+    if resolution == "D":
+        sec_per_candle = 24 * 3600
+    else:
+        sec_per_candle = int(resolution) * 60
+
+    from_ts = max(0, now - limit * sec_per_candle)
+    to_ts = now
+
+    url = (
+        f"https://finnhub.io/api/v1/stock/candle"
+        f"?symbol={symbol}&resolution={resolution}&from={from_ts}&to={to_ts}&token={key}"
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Finnhub error: {r.status_code} {r.text}")
+
+    data = r.json()
+    if data.get("s") != "ok":
+        raise HTTPException(status_code=404, detail=f"Finnhub returned status: {data.get('s')}")
+
+    times = data.get("t", [])
+    opens = data.get("o", [])
+    highs = data.get("h", [])
+    lows = data.get("l", [])
+    closes = data.get("c", [])
+
+    n = min(len(times), len(opens), len(highs), len(lows), len(closes))
+    candles = []
+    for i in range(n):
+        candles.append({
+            "time": int(times[i]),
+            "open": float(opens[i]),
+            "high": float(highs[i]),
+            "low": float(lows[i]),
+            "close": float(closes[i])
+        })
+    return candles
+
+def process_fvg_placeholder(candles: List[Dict[str, Any]], symbol: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Placeholder for your FVG processing logic. Replace this with real logic.
+    - receives a list of candles (dicts with time/open/high/low/close)
+    - returns sample analysis result
+    """
+    # simple illustrative values:
+    n = len(candles)
+    latest = candles[-1] if n > 0 else {}
+    return {
+        "status": "processed",
+        "symbol": symbol,
+        "candles_received": n,
+        "latest_close": latest.get("close"),
+        "message": "Replace process_fvg_placeholder with your real FVG analyzer"
+    }
+
+@app.post("/ict/fvg")
+async def ict_fvg(req: Request):
+    """
+    Accepts JSON payload:
+      - either supply "candles": [ {time,open,high,low,close}, ... ]
+      - OR supply "symbol" and optional "interval" (default 5m) and backend will fetch candles from Finnhub
+    """
+    payload = await req.json()
+    # Try to parse Pydantic model (allow extra)
+    # Use incoming candles if present
+    candles_payload = payload.get("candles")
+    if candles_payload is None:
+        # attempt fetch using symbol + interval
+        symbol = payload.get("symbol")
+        interval = payload.get("interval", "5m")
+        limit = int(payload.get("limit", 200))
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Either 'candles' or 'symbol' must be provided")
+        try:
+            candles = await fetch_candles_finnhub(symbol, interval, limit=limit)
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Failed fetching candles: {str(e)}")
+    else:
+        # validate minimal structure
+        if not isinstance(candles_payload, list) or len(candles_payload) == 0:
+            raise HTTPException(status_code=400, detail="candles must be a non-empty list")
+        # ensure numeric types
+        candles = []
+        for c in candles_payload:
+            try:
+                candles.append({
+                    "time": int(c["time"]),
+                    "open": float(c["open"]),
+                    "high": float(c["high"]),
+                    "low": float(c["low"]),
+                    "close": float(c["close"])
+                })
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid candle format: {e}")
+
+        symbol = payload.get("symbol")
+
+    # Call your FVG processing code here. Right now uses a placeholder.
+    result = process_fvg_placeholder(candles, symbol=symbol)
+    return result
+
+# Optional root info
+@app.get("/")
+def root():
+    return {"info": "AstroQuant backend running. Use /health and /ict/fvg"}
+
+# Run: uvicorn server:app --host 0.0.0.0 --port 8000
