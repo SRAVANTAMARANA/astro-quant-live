@@ -2,6 +2,9 @@
 # FastAPI backend - unified "signals" endpoint combining multiple APIs
 # Async, uses httpx
 import os
+from dotenv import load_dotenv
+# Load environment variables from .env
+load_dotenv()
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
