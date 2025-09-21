@@ -1,4 +1,5 @@
-version: "3.8"
+version: "3.9"
+
 services:
   backend:
     build: ./backend
@@ -7,6 +8,9 @@ services:
       - .env
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
   frontend:
@@ -16,6 +20,9 @@ services:
       - .env
     ports:
       - "3000:3000"
-    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+    command: npm start
     depends_on:
       - backend
+    restart: unless-stopped
