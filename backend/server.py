@@ -1,151 +1,215 @@
 # backend/server.py
+# FastAPI backend - unified "signals" endpoint combining multiple APIs
+# Async, uses httpx
 import os
-import time
-import logging
-from typing import List, Dict, Any
-from fastapi import FastAPI, BackgroundTasks
+import asyncio
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+
+import httpx
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests
-from dotenv import load_dotenv
 
-load_dotenv()  # loads .env from repo root
+# optional simple in-memory cache
+_CACHE: Dict[str, Dict[str, Any]] = {}
 
-# Config from .env
-TWELVEDATA_API_KEY = os.getenv("TWELVEDATA_API_KEY", "")
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+app = FastAPI(title="AstroQuant Backend (API aggregator)")
 
-SIGNAL_CACHE_TTL = int(os.getenv("SIGNAL_CACHE_TTL", "15"))  # seconds
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("astroquant-backend")
-
-app = FastAPI(title="AstroQuant Backend - Signals")
-
+# allow frontend origin (adjust origin(s) in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
+    allow_origins=["*"],  # for local dev; tighten for production
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# in-memory cache
-_cache = {"signals": [], "ts": 0}
+# read keys from environment (set in .env and docker-compose)
+TWELVE_KEY = os.getenv("TWELVEDATA_API_KEY", "")
+FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
+ALPHAV_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# Utilities: caching helper
+def cache_get(key: str, max_age_seconds=20):
+    rec = _CACHE.get(key)
+    if not rec:
+        return None
+    if (datetime.utcnow() - rec["ts"]).total_seconds() > max_age_seconds:
+        return None
+    return rec["value"]
+
+def cache_set(key: str, value: Any):
+    _CACHE[key] = {"value": value, "ts": datetime.utcnow()}
 
 
-class Signal(BaseModel):
+# Pydantic response model (simple)
+class SignalResp(BaseModel):
     symbol: str
-    signal: str  # BUY/SELL/NONE
-    strength: str  # high/medium/low
-    source: str
+    price: Optional[float] = None
+    source_prices: Dict[str, Any] = {}
+    news: List[Dict[str, Any]] = []
     meta: Dict[str, Any] = {}
 
 
-def fetch_from_twelvedata(symbol: str, interval="1min", outputsize=100):
-    """Example: fetch latest candle from TwelveData"""
-    if not TWELVEDATA_API_KEY:
-        return None
-    url = "https://api.twelvedata.com/time_series"
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "outputsize": outputsize,
-        "format": "JSON",
-        "apikey": TWELVEDATA_API_KEY,
-    }
-    r = requests.get(url, params=params, timeout=10)
-    if r.status_code != 200:
-        logger.warning("TwelveData failed %s %s", r.status_code, r.text)
-        return None
-    return r.json()
+# Async fetch helpers using httpx
+async def fetch_twelvedata_quote(symbol: str) -> Dict[str, Any]:
+    # TwelveData example: https://twelvedata.com/docs
+    if not TWELVE_KEY:
+        return {"error": "no_twelvedata_key"}
+    url = "https://api.twelvedata.com/price"
+    params = {"symbol": symbol, "apikey": TWELVE_KEY}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, params=params)
+        if resp.status_code != 200:
+            return {"error": f"td_status:{resp.status_code}", "text": resp.text[:200]}
+        data = resp.json()
+        return data
 
 
-def simple_signal_logic_from_data(symbol: str, data: dict) -> Signal:
-    """
-    Placeholder signal generator:
-    - looks at last two close prices and returns BUY if last>prev, SELL if last<prev
-    Replace with your ICT/Gann/math logic.
-    """
-    timeseries = data.get("values") or data.get("values", [])
-    if not timeseries or len(timeseries) < 2:
-        return Signal(symbol=symbol, signal="NONE", strength="low", source="data_missing")
-    last = float(timeseries[0]["close"])
-    prev = float(timeseries[1]["close"])
-    if last > prev:
-        s = "BUY"
-        strength = "high" if (last - prev) / prev > 0.0005 else "medium"
-    elif last < prev:
-        s = "SELL"
-        strength = "high" if (prev - last) / prev > 0.0005 else "medium"
-    else:
-        s = "NONE"
-        strength = "low"
-    return Signal(symbol=symbol, signal=s, strength=strength, source="twelvedata_simple")
+async def fetch_finnhub_quote_and_news(symbol: str) -> Dict[str, Any]:
+    # Finnhub quote & company news
+    if not FINNHUB_KEY:
+        return {"error": "no_finnhub_key"}
+    base = "https://finnhub.io/api/v1"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        qurl = f"{base}/quote"
+        params = {"symbol": symbol, "token": FINNHUB_KEY}
+        qresp = await client.get(qurl, params=params)
+        # news (past 7 days)
+        today = datetime.utcnow().date()
+        frm = (today - timedelta(days=7)).isoformat()
+        to = today.isoformat()
+        nurl = f"{base}/company-news"
+        nresp = await client.get(nurl, params={"symbol": symbol, "from": frm, "to": to, "token": FINNHUB_KEY})
+        out = {
+            "quote": qresp.json() if qresp.status_code == 200 else {"error": qresp.text},
+            "news": nresp.json() if nresp.status_code == 200 else {"error": nresp.text},
+        }
+        return out
 
 
-def send_telegram(text: str):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.debug("Telegram not configured")
-        return False
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+async def fetch_alpha_vantage_quote(symbol: str) -> Dict[str, Any]:
+    if not ALPHAV_KEY:
+        return {"error": "no_alpha_v_key"}
+    url = "https://www.alphavantage.co/query"
+    params = {"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": ALPHAV_KEY}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, params=params)
+        return resp.json()
+
+
+async def get_combined_symbol_data(symbol: str) -> SignalResp:
+    # caching by symbol
+    cache_key = f"symbol:{symbol}"
+    cached = cache_get(cache_key, max_age_seconds=20)
+    if cached:
+        return cached
+
+    # run API calls concurrently
+    results = await asyncio.gather(
+        fetch_twelvedata_quote(symbol),
+        fetch_finnhub_quote_and_news(symbol),
+        fetch_alpha_vantage_quote(symbol),
+    )
+
+    td, fh, av = results
+
+    # build a combined result
+    out = SignalResp(
+        symbol=symbol,
+        price=None,
+        source_prices={
+            "twelvedata": td,
+            "finnhub": fh.get("quote") if isinstance(fh, dict) else fh,
+            "alphavantage": av,
+        },
+        news=(fh.get("news") if isinstance(fh, dict) else []) or [],
+        meta={
+            "fetched_at": datetime.utcnow().isoformat(),
+        },
+    )
+
+    # try to set primary price from sources in order
     try:
-        r = requests.post(url, json=payload, timeout=10)
-        r.raise_for_status()
-        logger.info("Telegram sent")
-        return True
-    except Exception as e:
-        logger.exception("Telegram send failed: %s", e)
-        return False
+        # twelvedata returns {"price": "1234.56"}
+        if isinstance(td, dict) and "price" in td:
+            out.price = float(td["price"])
+        elif isinstance(fh, dict) and "quote" in fh and isinstance(fh["quote"], dict) and "c" in fh["quote"]:
+            out.price = float(fh["quote"]["c"])
+        elif isinstance(av, dict) and "Global Quote" in av and "05. price" in av["Global Quote"]:
+            out.price = float(av["Global Quote"]["05. price"])
+    except Exception:
+        # ignore parsing errors
+        pass
 
-
-def generate_signals_for_symbols(symbols: List[str]) -> List[Signal]:
-    out: List[Signal] = []
-    for s in symbols:
-        # Try TwelveData, fallback to dummy
-        data = fetch_from_twelvedata(s)
-        if not data:
-            # fallback dummy
-            sig = Signal(symbol=s, signal="NONE", strength="low", source="fallback")
-        else:
-            sig = simple_signal_logic_from_data(s, data)
-        out.append(sig)
+    cache_set(cache_key, out)
     return out
 
 
-@app.get("/signals", response_model=List[Signal])
-def get_signals(background_tasks: BackgroundTasks):
-    """Return cached signals. If cache expired, schedule a background refresh"""
-    now = int(time.time())
-    if now - _cache["ts"] > SIGNAL_CACHE_TTL:
-        # update cache in background
-        background_tasks.add_task(_refresh_cache)
-    return _cache["signals"]
+async def send_telegram_message(text: str) -> Dict[str, Any]:
+    # Basic Telegram notify helper - only if bot token and chat id exist
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return {"error": "no_telegram_config"}
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.post(url, json=payload)
+        return r.json()
 
 
-def _refresh_cache():
-    """Fetch fresh signals and send telegram if new important signals appear"""
-    logger.info("Refreshing cache")
-    symbols = ["XAUUSD", "EURUSD", "BTC/USD", "AAPL"]  # CHANGE to your universe
-    signals = generate_signals_for_symbols(symbols)
-    # compare with previous to send alerts for new buy/sell
-    prev = {s["symbol"]: s for s in _cache.get("signals", [])}
-    for s in signals:
-        prev_s = prev.get(s.symbol)
-        if prev_s and prev_s["signal"] != s.signal and s.signal in ("BUY", "SELL"):
-            # Send Telegram alert
-            text = f"*Signal:* {s.signal}\n*Symbol:* {s.symbol}\n*Strength:* {s.strength}\n*Source:* {s.source}"
-            send_telegram(text)
-    _cache["signals"] = [sig.dict() for sig in signals]
-    _cache["ts"] = int(time.time())
-    logger.info("Cache refreshed")
+@app.get("/signals", response_model=List[SignalResp])
+async def signals(symbols: Optional[str] = "XAUUSD,EURUSD,USDJPY"):
+    """
+    /signals?symbols=XAUUSD,EURUSD
+    Returns a list of symbol data combined from multiple APIs.
+    """
+
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    tasks = [get_combined_symbol_data(s) for s in symbol_list]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    out = []
+    for r in results:
+        if isinstance(r, Exception):
+            out.append({"symbol": "ERROR", "meta": {"error": str(r)}})
+        else:
+            out.append(r)
+
+    # Example: if big move or special condition, send Telegram notification
+    # Simple rule: if XAUUSD moved > 0.5% (just example)
+    try:
+        for s in out:
+            if isinstance(s, SignalResp) and s.symbol.upper() == "XAUUSD" and s.price:
+                # compute relative change using Finnhub quote 'pc' previous close if available
+                fh_q = s.source_prices.get("finnhub", {})
+                prev_close = None
+                if isinstance(fh_q, dict):
+                    prev_close = fh_q.get("pc") or fh_q.get("p")  # fallback
+                if prev_close:
+                    try:
+                        prev_close = float(prev_close)
+                        curr = float(s.price)
+                        pct = abs(curr - prev_close) / prev_close * 100.0
+                        if pct > 0.5:
+                            await send_telegram_message(f"AstroQuant Alert: {s.symbol} moved {pct:.2f}% now {curr}")
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # convert SignalResp objects to dicts for JSON response
+    final = []
+    for s in out:
+        if isinstance(s, SignalResp):
+            final.append(s.dict())
+        else:
+            final.append(s)
+    return final
 
 
-@app.on_event("startup")
-def startup_event():
-    logger.info("Starting up backend")
-    # initial cache fill
-    _refresh_cache()
+@app.get("/health")
+async def health():
+    return {"status": "ok", "time": datetime.utcnow().isoformat()}
