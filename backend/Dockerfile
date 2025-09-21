@@ -1,7 +1,11 @@
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
+# -- somewhere after setting WORKDIR /app and copying requirements --
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
-COPY fetch_and_send_twelvedata.py /app/
-ENV PYTHONUNBUFFERED=1
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# copy the backend app files
+COPY . /app
+
+# copy our new utility script explicitly (if you prefer)
+COPY fetch_and_send_twelvedata.py /app/fetch_and_send_twelvedata.py
+
+# ensure entrypoint/cmd unchanged
