@@ -1,28 +1,30 @@
 # ============================
-# Backend Dockerfile
+# Backend Dockerfile (Alpine)
 # ============================
 
-# Use Python base image (Debian based)
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
-# Set work directory inside container
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies: curl + jq for debugging
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system tools (curl + jq + build deps for pip)
+RUN apk add --no-cache \
     curl \
     jq \
-    && rm -rf /var/lib/apt/lists/*
+    gcc \
+    musl-dev \
+    libffi-dev \
+    && pip install --upgrade pip
 
-# Install Python dependencies
+# Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend source
 COPY . .
 
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run the app
+# Start backend
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
