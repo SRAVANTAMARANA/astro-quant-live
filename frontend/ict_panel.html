@@ -1,72 +1,207 @@
-<!DOCTYPE html>
+<!-- frontend/ictPanel.html -->
+<!doctype html>
 <html>
 <head>
-  <title>ICT Chart Panel</title>
   <meta charset="utf-8"/>
+  <title>AstroQuant ICT Chart Panel</title>
   <style>
-    body { font-family: Arial; margin: 20px; }
-    #chart { height: 500px; }
-    .panel { margin-top: 20px; }
-    button { margin: 5px; padding: 10px; }
+    body { font-family: Arial, Helvetica, sans-serif; margin:0; padding:0; display:flex; height:100vh; }
+    #left { width:72%; padding:12px; box-sizing:border-box; }
+    #right { width:28%; padding:12px; border-left:1px solid #ddd; box-sizing:border-box; overflow:auto; }
+    #chartContainer { height:70vh; background:#fff; border:1px solid #ccc; }
+    .toolbar { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { padding:8px 12px; background:#0366d6; color:#fff; border-radius:4px; cursor:pointer; }
+    .btn.gray { background:#6c757d; }
+    .signalRow { padding:8px; border-bottom:1px solid #eee; font-size:13px; }
+    .mentor { margin-top:12px; }
   </style>
+  <!-- Lightweight charts -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-  <h1>AstroQuant ICT Chart Panel</h1>
-  
-  <!-- TradingView Widget -->
-  <div id="chart"></div>
-  <script src="https://s3.tradingview.com/tv.js"></script>
-  <script>
-    new TradingView.widget({
-      "container_id": "chart",
-      "symbol": "OANDA:XAUUSD",
-      "interval": "5",
-      "timezone": "Etc/UTC",
-      "theme": "light",
-      "style": "1",
-      "locale": "en",
-      "enable_publishing": false,
-      "hide_top_toolbar": false,
-      "hide_legend": false,
-      "save_image": false
-    });
-  </script>
+  <div id="left">
+    <h2>AstroQuant ICT Chart Panel</h2>
+    <div style="display:flex; gap:12px;">
+      <div>
+        <label>Symbol</label><br/>
+        <input id="symbol" value="XAU/USD" style="width:160px" />
+      </div>
+      <div>
+        <label>Source</label><br/>
+        <select id="source"><option value="twelvedata">TwelveData</option><option value="alpha">AlphaVantage</option></select>
+      </div>
+      <div>
+        <label>Interval</label><br/>
+        <select id="interval"><option>1min</option><option>5min</option><option>15min</option><option>1h</option></select>
+      </div>
+      <div style="align-self:flex-end;">
+        <button id="loadBtn" class="btn">Load</button>
+      </div>
+    </div>
 
-  <!-- ICT Controls -->
-  <div class="panel">
-    <h3>ICT Tools</h3>
-    <button onclick="checkFVG()">Detect FVG</button>
-    <button onclick="checkTurtleSoup()">Detect Turtle Soup</button>
+    <div class="toolbar">
+      <button class="btn" id="runSignalsBtn">Run ICT Signals</button>
+      <button class="btn gray" id="toggleOB">OrderBlocks</button>
+      <button class="btn gray" id="toggleFVG">FVG</button>
+      <button class="btn gray" id="toggleTurtle">TurtleSoup</button>
+      <button class="btn gray" id="toggleLiq">Liquidity</button>
+      <button class="btn" id="mentorBtn">AI Mentor</button>
+      <button class="btn gray" id="playMentor">Play Narration</button>
+    </div>
+
+    <div id="chartContainer"></div>
   </div>
 
-  <pre id="output"></pre>
+  <div id="right">
+    <h3>Signals</h3>
+    <div id="signalsList"></div>
 
-  <script>
-    async function checkFVG() {
-      const res = await fetch("/ict/fvg", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({candles: sampleData})
-      });
-      document.getElementById("output").textContent = JSON.stringify(await res.json(), null, 2);
-    }
+    <div class="mentor">
+      <h4>AI Mentor</h4>
+      <div id="mentorText" style="white-space:pre-line; background:#f8f9fa; padding:8px; border-radius:4px;"></div>
+    </div>
 
-    async function checkTurtleSoup() {
-      const res = await fetch("/ict/turtle_soup", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({candles: sampleData})
-      });
-      document.getElementById("output").textContent = JSON.stringify(await res.json(), null, 2);
-    }
+    <div style="margin-top:12px;">
+      <h4>Quick Tests</h4>
+      <button class="btn" id="testAlphaBtn">Test AlphaVantage</button>
+      <button class="btn" id="testTwelveBtn">Test TwelveData</button>
+    </div>
+  </div>
 
-    // --- Sample Candles for Testing ---
-    const sampleData = [
-      {"time":"2025-09-19T09:30","open":3400,"high":3410,"low":3395,"close":3405},
-      {"time":"2025-09-19T09:35","open":3405,"high":3415,"low":3400,"close":3410},
-      {"time":"2025-09-19T09:40","open":3410,"high":3420,"low":3408,"close":3415},
-      {"time":"2025-09-19T09:45","open":3415,"high":3425,"low":3405,"close":3410}
-    ];
-  </script>
+<script>
+const FRONTEND_API_BASE = "http://localhost:8000";
+
+// Initialize lightweight chart
+const chart = LightweightCharts.createChart(document.getElementById('chartContainer'), {
+  layout: { backgroundColor: '#ffffff', textColor: '#000' },
+  grid: { vertLines: { color: '#eee' }, horzLines: { color: '#eee' } },
+});
+const candleSeries = chart.addCandlestickSeries();
+let markers = [];
+
+function setMarkers(arr) {
+  // clear
+  candleSeries.setMarkers([]);
+  candleSeries.setMarkers(arr);
+}
+
+async function loadCandles(symbol, source, interval) {
+  const url = `${FRONTEND_API_BASE}/candles?symbol=${encodeURIComponent(symbol)}&source=${source}&interval=${interval}&outputsize=300`;
+  const r = await fetch(url);
+  const j = await r.json();
+  if (j.status === "ok" || j.data) {
+    const data = j.data || j;
+    // convert to lightweight format
+    const lite = (j.data || j).map(c => ({
+      time: c.time.includes('T') ? c.time.split('.')[0] : c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close
+    }));
+    candleSeries.setData(lite);
+    chart.timeScale().fitContent();
+    return lite;
+  } else {
+    alert("Failed to fetch candles: " + JSON.stringify(j));
+  }
+}
+
+async function runSignals(symbol, source, interval) {
+  const url = `${FRONTEND_API_BASE}/ict/signals?symbol=${encodeURIComponent(symbol)}&source=${source}&interval=${interval}`;
+  const r = await fetch(url);
+  const j = await r.json();
+  if (j.status !== "ok") {
+    alert("signals error: " + JSON.stringify(j));
+    return;
+  }
+  const signals = j.signals || [];
+  document.getElementById('signalsList').innerHTML = '';
+  const markArr = [];
+  for (const s of signals) {
+    const row = document.createElement('div');
+    row.className = 'signalRow';
+    row.innerHTML = `<b>${s.type}</b> ${s.price || s.sweep_price || s.gap_top || ''} - ${s.note || ''} <small>${s.time || ''}</small>`;
+    document.getElementById('signalsList').appendChild(row);
+
+    // marker
+    const marker = {
+      time: s.time || '',
+      position: (s.type || '').includes('buy') || (s.type || '').includes('long') ? 'belowBar' : 'aboveBar',
+      color: (s.type || '').includes('buy') || (s.type || '').includes('long') ? 'green' : 'red',
+      shape: 'circle',
+      text: s.type.replace(/_/g,' ')
+    };
+    if (s.price) marker.price = s.price;
+    markArr.push(marker);
+  }
+  setMarkers(markArr);
+  return signals;
+}
+
+async function loadMentor(symbol, source, interval) {
+  const url = `${FRONTEND_API_BASE}/mentor?symbol=${encodeURIComponent(symbol)}&source=${source}&interval=${interval}`;
+  const r = await fetch(url);
+  const j = await r.json();
+  if (j.status !== "ok") {
+    document.getElementById('mentorText').textContent = "Mentor error: " + JSON.stringify(j);
+    return;
+  }
+  document.getElementById('mentorText').textContent = j.narrative.join('\n');
+  // store for TTS
+  document.getElementById('mentorText').dataset.tts = j.narrative.join(' ');
+}
+
+document.getElementById('loadBtn').addEventListener('click', async ()=>{
+  const symbol = document.getElementById('symbol').value;
+  const source = document.getElementById('source').value;
+  const interval = document.getElementById('interval').value;
+  await loadCandles(symbol, source, interval);
+});
+
+document.getElementById('runSignalsBtn').addEventListener('click', async ()=>{
+  const symbol = document.getElementById('symbol').value;
+  const source = document.getElementById('source').value;
+  const interval = document.getElementById('interval').value;
+  await runSignals(symbol, source, interval);
+});
+
+document.getElementById('mentorBtn').addEventListener('click', async ()=>{
+  const symbol = document.getElementById('symbol').value;
+  const source = document.getElementById('source').value;
+  const interval = document.getElementById('interval').value;
+  await loadMentor(symbol, source, interval);
+});
+
+document.getElementById('playMentor').addEventListener('click', ()=>{
+  const text = document.getElementById('mentorText').dataset.tts || document.getElementById('mentorText').innerText;
+  if (!text) return alert("No mentor text");
+  const u = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(u);
+});
+
+// Quick API tests
+document.getElementById('testAlphaBtn').addEventListener('click', async ()=>{
+  const sym = document.getElementById('symbol').value;
+  const r = await fetch(`${FRONTEND_API_BASE}/candles?symbol=${encodeURIComponent(sym)}&source=alpha&interval=1min`);
+  const j = await r.json();
+  alert(JSON.stringify(j.status ? j : j));
+});
+
+document.getElementById('testTwelveBtn').addEventListener('click', async ()=>{
+  const sym = document.getElementById('symbol').value;
+  const r = await fetch(`${FRONTEND_API_BASE}/candles?symbol=${encodeURIComponent(sym)}&source=twelvedata&interval=1min`);
+  const j = await r.json();
+  alert(JSON.stringify(j.status ? j : j));
+});
+
+// On first load try to fetch default symbol
+(async function init() {
+  const sym = document.getElementById('symbol').value;
+  const src = document.getElementById('source').value;
+  const intv = document.getElementById('interval').value;
+  await loadCandles(sym, src, intv);
+})();
+</script>
 </body>
 </html>
