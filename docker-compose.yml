@@ -1,19 +1,59 @@
 version: "3.9"
+
 services:
   backend:
-    build: ./backend
-    container_name: astro-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: astro-quant-backend:latest
     env_file:
-      - .env
+      - ./backend/.env          # <-- must exist locally (do not commit real keys)
+    volumes:
+      - ./backend:/app          # live code (helpful in dev)
     ports:
       - "8000:8000"
-    restart: unless-stopped
+    depends_on:
+      - frontend
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aq-net
+
   frontend:
-    build: ./frontend
-    container_name: astro-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: astro-quant-frontend:latest
     env_file:
-      - .env
+      - ./frontend/.env.template   # placeholders only; frontend should call backend endpoints
+    volumes:
+      - ./frontend:/app
     ports:
-      - "3000:3000"
+      - "5173:5173"               # Vite default; change if your frontend uses a different port
+    environment:
+      - VITE_BACKEND_URL=http://backend:8000
     depends_on:
       - backend
+    restart: always
+    networks:
+      - aq-net
+
+  # Optional local helper: a small "tools" service to run one-off scripts (rotate keys, test APIs)
+  tools:
+    image: alpine:3.17
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 3600"]
+    volumes:
+      - ./backend:/workspace/backend
+    networks:
+      - aq-net
+    restart: "no"
+
+networks:
+  aq-net:
+    driver: bridge
