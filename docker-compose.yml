@@ -1,72 +1,22 @@
-# docker-compose.yml
-version: "3.8"
+version: "3.9"
 
 services:
   backend:
-    # build from ./backend (must contain a Dockerfile)
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: astro-backend
+    build: ./backend
     env_file:
-      - ./backend/backend.env      # <-- Make sure this path is correct relative to this compose file
+      - ./backend/.env
     volumes:
-      - ./backend:/app             # dev: mount code into container (optional in production)
+      - ./backend:/app
     ports:
       - "8000:8000"
-    depends_on:
-      - redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    command: ["bash", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
   frontend:
-    build:
-      context: ./live-1-frontend     # <-- adjust if your frontend path differs
-      dockerfile: Dockerfile
-    container_name: astro-frontend
+    build: ./frontend
+    env_file:
+      - ./frontend/.env
     volumes:
-      - ./live-1-frontend:/usr/share/nginx/html:ro   # if using nginx static serve Dockerfile, mount static files
+      - ./frontend:/app
     ports:
-      - "3000:80"                # frontend served on host:3000 mapped to container's 80
-    depends_on:
-      - backend
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
-      interval: 20s
-      timeout: 5s
-      retries: 3
-
-  redis:
-    image: redis:7-alpine
-    container_name: astro-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-# Optional: uncomment and configure if you need postgres
-#  postgres:
-#    image: postgres:15-alpine
-#    container_name: astro-postgres
-#    env_file:
-#      - ./backend/postgres.env
-#    ports:
-#      - "5432:5432"
-#    volumes:
-#      - pgdata:/var/lib/postgresql/data
-#    restart: unless-stopped
-
-volumes:
-  redis-data:
-  # pgdata:
+      - "5173:5173"
+    command: ["bash", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
