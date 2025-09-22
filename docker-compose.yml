@@ -1,18 +1,17 @@
 version: "3.9"
-
 services:
   backend:
     build: ./backend
-    env_file:
-      - .env   # points to the .env in repo root
+    container_name: astro-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
+    container_name: astro-frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
+    restart: unless-stopped
+    depends_on:
+      - backend
