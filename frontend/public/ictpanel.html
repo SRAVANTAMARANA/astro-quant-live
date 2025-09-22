@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AstroQuant ICT Chart Panel</title>
+  <script src="https://s3.tradingview.com/tv.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f5f7fa; margin:0; }
+    #chart { height: 70vh; }
+    #signals { background:#fff; padding:10px; border-top:2px solid #ccc; height:30vh; overflow:auto; }
+    .signal { padding:6px; border-bottom:1px solid #ddd; }
+    .buy { color:green; font-weight:bold; }
+    .sell { color:red; font-weight:bold; }
+  </style>
+</head>
+<body>
+  <h2>AstroQuant ICT Chart Panel</h2>
+  <div id="chart"></div>
+  <div id="signals"></div>
+  <script>
+    new TradingView.widget({
+      container_id: "chart",
+      autosize: true,
+      symbol: "OANDA:XAUUSD",
+      interval: "5",
+      timezone: "Etc/UTC",
+      theme: "light",
+      style: "1",
+      locale: "en",
+      toolbar_bg: "#f1f3f6",
+      enable_publishing: false,
+      hide_side_toolbar: false,
+      allow_symbol_change: true,
+    });
+
+    async function loadSignals() {
+      let res = await fetch("http://localhost:8000/ict/signals", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({symbol:"XAU/USD", interval:"1min", limit:50})
+      });
+      let data = await res.json();
+      let box = document.getElementById("signals");
+      box.innerHTML = "<h3>ICT Signals</h3><p>"+data.narrative+"</p>";
+      data.signals.forEach(sig=>{
+        let div = document.createElement("div");
+        div.className="signal "+(sig.type=="BUY"?"buy":"sell");
+        div.innerText = sig.time+" → "+sig.model+" ("+sig.type+")";
+        box.appendChild(div);
+      });
+    }
+    loadSignals();
+    setInterval(loadSignals, 60000);
+  </script>
+</body>
+</html>
