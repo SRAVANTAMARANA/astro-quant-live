@@ -1,56 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>AstroQuant ICT Chart Panel</title>
-  <script src="https://s3.tradingview.com/tv.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background:#f5f7fa; margin:0; }
-    #chart { height: 70vh; }
-    #signals { background:#fff; padding:10px; border-top:2px solid #ccc; height:30vh; overflow:auto; }
-    .signal { padding:6px; border-bottom:1px solid #ddd; }
-    .buy { color:green; font-weight:bold; }
-    .sell { color:red; font-weight:bold; }
+    body { margin:0; background:#f8f9fa; font-family:sans-serif; }
+    #chart { height:90vh; }
+    #status { padding:10px; background:#eee; font-size:14px; }
   </style>
 </head>
 <body>
-  <h2>AstroQuant ICT Chart Panel</h2>
+  <div id="status">Loading data from backend...</div>
   <div id="chart"></div>
-  <div id="signals"></div>
-  <script>
-    new TradingView.widget({
-      container_id: "chart",
-      autosize: true,
-      symbol: "OANDA:XAUUSD",
-      interval: "5",
-      timezone: "Etc/UTC",
-      theme: "light",
-      style: "1",
-      locale: "en",
-      toolbar_bg: "#f1f3f6",
-      enable_publishing: false,
-      hide_side_toolbar: false,
-      allow_symbol_change: true,
-    });
 
-    async function loadSignals() {
-      let res = await fetch("http://localhost:8000/ict/signals", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({symbol:"XAU/USD", interval:"1min", limit:50})
-      });
-      let data = await res.json();
-      let box = document.getElementById("signals");
-      box.innerHTML = "<h3>ICT Signals</h3><p>"+data.narrative+"</p>";
-      data.signals.forEach(sig=>{
-        let div = document.createElement("div");
-        div.className="signal "+(sig.type=="BUY"?"buy":"sell");
-        div.innerText = sig.time+" → "+sig.model+" ("+sig.type+")";
-        box.appendChild(div);
-      });
+  <script>
+    async function loadCandles() {
+      try {
+        // Call your backend (make sure port matches docker-compose)
+        const res = await fetch("http://localhost:8000/ict/candles?symbol=XAUUSD&interval=1min&limit=100");
+        if (!res.ok) throw new Error("Backend error " + res.status);
+        const data = await res.json();
+
+        document.getElementById("status").innerText = "Data loaded from backend ✔";
+
+        // Transform to chart format
+        const candles = data.map(c => ({
+          time: new Date(c.datetime).getTime() / 1000,
+          open: parseFloat(c.open),
+          high: parseFloat(c.high),
+          low: parseFloat(c.low),
+          close: parseFloat(c.close),
+        }));
+
+        // Build chart
+        const chart = LightweightCharts.createChart(document.getElementById("chart"), {
+          width: window.innerWidth,
+          height: window.innerHeight * 0.9,
+          layout: { background: { color: "#ffffff" }, textColor: "#333" },
+          grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+        });
+        const candleSeries = chart.addCandlestickSeries();
+        candleSeries.setData(candles);
+      } catch (err) {
+        document.getElementById("status").innerText = "Failed to load data ❌: " + err.message;
+      }
     }
-    loadSignals();
-    setInterval(loadSignals, 60000);
+
+    loadCandles();
   </script>
 </body>
 </html>
