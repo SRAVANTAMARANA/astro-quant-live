@@ -1,12 +1,10 @@
 # backend/server.py
+# near your other imports
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-# import the router that does the TwelveData fetch + forward
-from twelvedata_api import router as tw_router
-
+from .proxy_candles import router as proxy_candles_router
+app = FastAPI()
+app.include_router(proxy_candles_router)
 app = FastAPI(title="AstroQuant backend (minimal)")
-
 # allow CORS from your frontend if needed (adjust origins)
 app.add_middleware(
     CORSMiddleware,
