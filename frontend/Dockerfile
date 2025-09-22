@@ -1,16 +1,13 @@
-# backend/Dockerfile
-FROM python:3.10-slim
+# frontend/Dockerfile
+FROM node:18-alpine AS build
 
 WORKDIR /app
+COPY ./ /app
 
-# Install dependencies
-COPY ./app/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Install simple static server
+RUN npm install -g serve
 
-# Copy app
-COPY ./app /app
+EXPOSE 3000
 
-EXPOSE 8000
-
-# Start backend server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Serve ictPanel.html on port 3000
+CMD ["serve", "-s", ".", "-l", "3000"]
