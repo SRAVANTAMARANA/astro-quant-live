@@ -1,19 +1,12 @@
-<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>AstroQuant Apex</title></head>
-<body>
-  <h1>AstroQuant Apex Frontend</h1>
-  <button onclick="loadSignals()">Load Signals</button>
-  <pre id="out">Waiting...</pre>
-<script>
-async function loadSignals(){
-  try{
-    const r = await fetch("http://localhost:8000/signals");
-    document.getElementById("out").innerText = JSON.stringify(await r.json(), null, 2);
-  }catch(e){
-    document.getElementById("out").innerText = "Error: "+e;
-  }
-}
-</script>
-</body>
-</html>
+<div>
+  <input id="sym" value="BTC/USD"/>
+  <button id="reload">Load</button>
+  <button id="alert">Load + Alert</button>
+</div>
+<div id="controls"></div>
+<div id="chart" style="height:520px;width:100%;"></div>
+<div id="signal-table"></div>
+<div id="narrative" style="padding:10px;border:1px solid #ccc;height:120px;overflow:auto;">
+  AI Mentor narrative will appear here.
+</div>
+<script type="module" src="/src/main.js"></script>
